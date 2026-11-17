@@ -80,8 +80,33 @@ body > header, .profile-aside { transition: transform .35s ease, opacity .35s ea
 html[data-backend] body > header { transform: translateY(-100%); }
 html[data-backend] .profile-aside { transform: translateX(-100%); opacity: 0; }
 @keyframes backend-in { from { opacity: 0; transform: scale(.98); } }
-.backend-page { animation: backend-in .4s .3s ease-out both; }
+@keyframes bk-out { to { opacity: 0; } }
+@keyframes bk-rise { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@keyframes bk-dots { 0% { content: ""; } 25% { content: "."; } 50% { content: ".."; } 75%, 100% { content: "..."; } }
+@keyframes bk-spin { 0% { content: "⠋"; } 17% { content: "⠙"; } 33% { content: "⠹"; } 50% { content: "⠸"; } 67% { content: "⠼"; } 83% { content: "⠴"; } }
+@keyframes bk-blink { 50% { opacity: 0; } }
+@keyframes bk-fill { from { width: 0; } to { width: 92%; } }
+@keyframes bk-reveal { from { transform: scaleX(0); } }
+
+/* always dark, in Claude desktop's warm greys (no clay orange) */
+.backend-page {
+  --bk-bg: #1f1e1d; --bk-panel: #262624; --bk-raised: #30302e; --bk-line: #3a3936;
+  --bk-text: #f0eee6; --bk-mute: #9a978e; --bk-accent: #c8c5bb; --bk-blue: #6a9bcc;
+  background: var(--bk-bg); color: var(--bk-text); color-scheme: dark; font-family: var(--font-geist-sans), system-ui, sans-serif;
+  animation: backend-in .4s .3s ease-out both;
+}
+.bk-term .bk-line { opacity: 0; animation: bk-rise .25s ease-out forwards; }
+.bk-dots::after { content: ""; animation: bk-dots 1s steps(1) infinite; animation-delay: inherit; }
+.bk-spin::after { content: "⠋"; animation: bk-spin .6s steps(1) infinite; }
+.bk-cursor { width: .6em; height: 1.1em; background: var(--bk-accent); animation: bk-blink 1s steps(1) infinite; }
+.bk-bar { width: 0; animation: bk-fill 3s 1s cubic-bezier(.2,.7,.2,1) forwards; }
+.backend-page.bk-leave { animation: bk-out .35s ease-in forwards; }
+.bk-rise { opacity: 0; animation: bk-rise .5s ease-out forwards; }
+/* charts draw in from the left (clip rect) and meters fill from zero */
+.bk-reveal { transform-box: fill-box; transform-origin: left; animation: bk-reveal 1.2s .35s cubic-bezier(.65,0,.35,1) both; }
+.bk-meter { transform-origin: left; animation: bk-reveal .9s .5s cubic-bezier(.65,0,.35,1) both; }
 @media (prefers-reduced-motion: reduce) {
   body > header, .profile-aside { transition: none; }
-  .backend-page { animation: none; }
+  .backend-page, .bk-reveal, .bk-meter, .bk-rise, .bk-term .bk-line, .bk-bar { animation: none; opacity: 1; }
+  .bk-bar { width: 92%; }
 }
