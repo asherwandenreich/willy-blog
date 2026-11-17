@@ -44,13 +44,16 @@ export default async function Calendar({ searchParams }: PageProps<"/calendar">)
   const asked = Number((await searchParams).month);
   const offset = asked === -1 || asked === 1 ? asked : 0;
 
-  const today = new Date();
-  const shown = new Date(today.getFullYear(), today.getMonth() + offset, 1);
+  // "today" in California: the server on AWS runs on UTC, which flips to tomorrow at 4–5pm Pacific
+  const [thisYear, thisMonth, thisDay] = new Date()
+    .toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" }) // "2026-11-16"
+    .split("-").map(Number);
+  const shown = new Date(thisYear, thisMonth - 1 + offset, 1);
   const year = shown.getFullYear();
   const month = shown.getMonth();
   const firstDay = shown.getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const isToday = (day: number) => offset === 0 && day === today.getDate();
+  const isToday = (day: number) => offset === 0 && day === thisDay;
 
   // blanks before the 1st so it lands under the right weekday, and after the last day to finish the week
   const cells = [
