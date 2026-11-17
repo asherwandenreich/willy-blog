@@ -22,6 +22,10 @@ declare module "sst" {
       "type": "sst.aws.Nextjs"
       "url": string
     }
+    "Spend": {
+      "arn": string
+      "type": "sst.aws.SnsTopic"
+    }
     "TodoistApiToken": {
       "type": "sst.sst.Secret"
       "value": string

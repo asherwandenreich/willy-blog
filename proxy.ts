@@ -8,8 +8,12 @@ const BOT = /bot|crawl|spider|slurp|preview|monitor|curl|wget|headless|lighthous
 
 export function proxy(request: NextRequest, event: NextFetchEvent) {
   const ua = request.headers.get("user-agent") ?? "";
+  // Full page loads only. Link prefetches would otherwise count: on AWS, OpenNext ignores the matcher's `missing`
+  // and Next hides the prefetch headers from proxy, but a browser marks a real page load with Sec-Fetch-Dest.
+  // ponytail: in-site client navigations aren't counted either; views = pages opened directly or refreshed.
+  const pageLoad = request.headers.get("sec-fetch-dest") === "document";
   // production only: local dev shares the same database and would skew the numbers
-  if (process.env.NODE_ENV === "production" && request.method === "GET" && !BOT.test(ua)) {
+  if (process.env.NODE_ENV === "production" && request.method === "GET" && pageLoad && !BOT.test(ua)) {
     const day = new Date().toISOString().slice(0, 10); // UTC day
     const ip = request.headers.get("x-forwarded-for")?.split(",")[0].trim() ?? "";
     const page = "/" + (request.nextUrl.pathname.split("/")[1] ?? "").replace(/[.$]/g, "_"); // top-level section, so /blogs/<id> counts as /blogs
