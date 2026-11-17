@@ -12,6 +12,9 @@ import CollegeHub from "@/components/CollegeHub";
 import CollegeModel from "@/lib/CollegeModel";
 import { COLLEGE_SEED } from "@/lib/collegeSeed";
 import type { College } from "@/lib/college";
+import ShoppingList, { type ShoppingItem } from "@/components/ShoppingList";
+import ShoppingItemModel from "@/lib/ShoppingModel";
+import ProfileIcon from "@/components/ProfileIcon";
 import Backend from "@/components/Backend";
 import { BackendLink } from "@/components/BackendLink";
 import { requestBlog } from "./actions";
@@ -57,6 +60,17 @@ async function loadColleges(): Promise<College[]> {
   }));
 }
 
+// Admins: the shopping list (the component sorts it into "to buy" and "checked off")
+async function loadShopping(): Promise<ShoppingItem[]> {
+  await dbConnect();
+  type Doc = { _id: unknown; text: string; price?: number; link?: string; done?: boolean; createdAt: Date; doneAt?: Date };
+  const docs = (await ShoppingItemModel.find().lean()) as unknown as Doc[];
+  return docs.map((i) => ({
+    id: String(i._id), text: i.text, price: i.price ?? undefined, link: i.link || undefined,
+    done: Boolean(i.done), createdAt: i.createdAt.getTime(), doneAt: i.doneAt?.getTime(),
+  }));
+}
+
 export default async function Profile({ searchParams }: PageProps<"/profile">) {
   const auth = await initAuth();
   const session = await auth.api.getSession({ headers: await headers() });
@@ -65,7 +79,7 @@ export default async function Profile({ searchParams }: PageProps<"/profile">) {
   const admin = ADMIN_EMAILS.includes(session.user.email);
   // the sidebar's choices; ?tab= picks which one fills the main area
   const tabs = admin
-    ? [{ tab: "", label: "Home" }, { tab: "requests", label: "Blog requests" }, { tab: "college", label: "College" }, { tab: "backend", label: "Backend" }]
+    ? [{ tab: "", label: "Home" }, { tab: "requests", label: "Blog requests" }, { tab: "college", label: "College" }, { tab: "shopping", label: "Shopping" }, { tab: "backend", label: "Backend" }]
     : [{ tab: "", label: "Home" }, { tab: "contribute", label: "Contribute a blog" }, { tab: "message", label: "Send a message" }];
   const params = await searchParams;
   const asked = params.tab;
@@ -73,6 +87,7 @@ export default async function Profile({ searchParams }: PageProps<"/profile">) {
 
   // the College page's own tab row picks the school (?school=)
   const colleges = current === "college" ? await loadColleges() : [];
+  const shopping = current === "shopping" ? await loadShopping() : [];
   const school = typeof params.school === "string" ? params.school : "";
   // "today" in California, so days-left counts match the calendar on the wall
   const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
@@ -87,10 +102,11 @@ export default async function Profile({ searchParams }: PageProps<"/profile">) {
             key={t.tab}
             href={t.tab ? `/profile?tab=${t.tab}` : "/profile"}
             aria-current={t.tab === current ? "page" : undefined}
-            className={`shrink-0 rounded-lg px-3 py-2 text-sm transition-colors ${t.tab === current
+            className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${t.tab === current
               ? "bg-zinc-100 dark:bg-zinc-900 font-bold"
               : "text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900 dark:hover:bg-zinc-950 dark:hover:text-zinc-100"}`}
           >
+            <ProfileIcon tab={t.tab} />
             {t.label}
           </Tab>
         ); })}
@@ -112,6 +128,7 @@ export default async function Profile({ searchParams }: PageProps<"/profile">) {
           </>)}
           {current === "requests" && <BlogRequests />}
           {current === "college" && <CollegeHub colleges={colleges} today={today} school={school} />}
+          {current === "shopping" && <ShoppingList items={shopping} />}
           {current === "backend" && <Backend />}
         </div>
       </section>
