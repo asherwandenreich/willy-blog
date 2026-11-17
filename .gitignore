@@ -45,3 +45,7 @@ next-env.d.ts
 
 # Python bytecode (scripts/blender)
 __pycache__/
+
+# sst / opennext (AWS deploy)
+.sst
+.open-next
