@@ -27,7 +27,7 @@ const TOP_FOV = 30; // the camera's field of view looking straight down
 const HAZE = [14, 50], LIT_HAZE = [14, 58], EDGE = [58, 68], WIN = [-55, 75];
 const BRIDGE_Z = -0.5; // where the red bridge crosses, just ahead of the camera
 const f = (v: number) => v.toFixed(5);
-const X_AXIS = new THREE.Vector3(1, 0, 0), Y_UP = new THREE.Vector3(0, 1, 0), Z_AXIS = new THREE.Vector3(0, 0, 1);
+const X_AXIS = new THREE.Vector3(1, 0, 0), Y_UP = new THREE.Vector3(0, 1, 0);
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v)), ease = (v: number) => v * v * (3 - 2 * v);
 const mix = (a: number, b: number, k: number) => a + (b - a) * k;
 
@@ -39,6 +39,10 @@ const bankHeight = (d: number) => { const k = smoothstep(0.95, 1.4, d); return (
 // formula, so what's placed on them sits on the ground)
 const hills = (x: number, z: number) => Math.max(0, 1.5 + 0.8 * Math.sin(z * 0.19 + x * 0.07) + 0.5 * Math.sin(z * 0.43 - x * 0.13 + 1.7) + 0.3 * Math.sin(x * 0.31 + z * 0.11));
 const HILL_FROM = 3.4, HILL_FULL = 5.5; // across the stream (1 = the water's edge)
+// In the low view the land fades into the page between these (across the stream, as above): far enough out that
+// a wide screen sees the far woods dissolve into the haze rather than bare slopes ending in nothing. The ground
+// reaches GROUND_W either side of the river to carry it.
+const BANK_FADE = [8, 17], GROUND_W = 60;
 const flowSpeed = (a: number) => 0.25 + 1.5 * Math.max(0, 1 - a * a);
 
 const COMMON = `
@@ -159,7 +163,7 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
     blankPath.needsUpdate = true;
     const uniforms: Record<string, THREE.IUniform> = {
         uTime: { value: 0 }, uAnchor: { value: 0 }, uFogNear: { value: HAZE[0] }, uFogFar: { value: HAZE[1] },
-        uEdge: { value: new THREE.Vector2(EDGE[0], EDGE[1]) }, uBank: { value: new THREE.Vector2(3.5, 9) },
+        uEdge: { value: new THREE.Vector2(EDGE[0], EDGE[1]) }, uBank: { value: new THREE.Vector2(BANK_FADE[0], BANK_FADE[1]) },
         uWin: { value: new THREE.Vector2(WIN[0], WIN[1]) },
         uPath: { value: blankPath }, uPathRange: { value: new THREE.Vector2(0, 1) }, uPathMix: { value: 0 },
         uNight: { value: 0 }, uPointK: { value: 7 }, uDpr: { value: renderer.getPixelRatio() }, uReflect: { value: 0.8 }, uSpread: { value: 1 },
@@ -191,8 +195,8 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
     };
 
     // ---- the ground: the bed under the water and the banks either side, one surface
-    const groundSeg: [number, number] = small ? [110, 220] : [170, 340];
-    const terrain = new THREE.Mesh(strip(30, ...groundSeg, 1.6), new THREE.ShaderMaterial({
+    const groundSeg: [number, number] = small ? [140, 220] : [220, 340]; // packed harder (curve 2) to keep the banks as fine
+    const terrain = new THREE.Mesh(strip(GROUND_W, ...groundSeg, 2), new THREE.ShaderMaterial({
         uniforms,
         vertexShader: `uniform float uSpread; varying vec3 vWorld; varying vec3 vN;
       ${COMMON}
@@ -658,7 +662,11 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
 
     const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), at = new THREE.Vector3(), Y = new THREE.Vector3(0, 1, 0);
     // where the pavilion stands (built further down): on the right bank upstream, beside the page's card
-    const PAV_Z = -11, PAV_X = river(PAV_Z)[0] + 2.5 * river(PAV_Z)[1];
+    const PAV_Z = -8, PAV_X = river(PAV_Z)[0] + 2.3 * river(PAV_Z)[1];
+    // The trees and bushes keep clear of where it used to stand, further upstream, so every random draw (and so
+    // the whole layout) stays as it was; the few that would grow through it where it is now are hidden instead.
+    const CLEAR_Z = -11, CLEAR_X = river(CLEAR_Z)[0] + 2.5 * river(CLEAR_Z)[1];
+    const inPavilion = (x: number, z: number, r: number) => Math.hypot(x - PAV_X, z - PAV_Z) < r;
     const treeMat = solid();
     treeMat.onBeforeCompile = (shader) => { // the leaves flutter in a light breeze, each tree out of step
         shader.uniforms.uTime = uniforms.uTime;
@@ -683,10 +691,10 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
             do { // anywhere on the banks, but leave the pavilion clear
                 z = -3 - rng() * 40; side = rng() < 0.5 ? -1 : 1; d = near + rng() * spread;
                 [cx, w] = river(z);
-            } while (Math.hypot(cx + side * d * w - PAV_X, z - PAV_Z) < 2.8);
+            } while (Math.hypot(cx + side * d * w - CLEAR_X, z - CLEAR_Z) < 2.8);
             q.setFromAxisAngle(Y, rng() * 6.28);
-            const k = 0.75 + rng() * 0.6;
-            mesh.setMatrixAt(i, m4.compose(at.set(cx + side * d * w, bankHeight(Math.min(d, 1.4)) - 0.05, z), q, sc.set(k, k * (0.9 + rng() * 0.25), k)));
+            const k = 0.75 + rng() * 0.6, hide = inPavilion(cx + side * d * w, z, 1.9) ? 0 : 1;
+            mesh.setMatrixAt(i, m4.compose(at.set(cx + side * d * w, bankHeight(Math.min(d, 1.4)) - 0.05, z), q, sc.set(k, k * (0.9 + rng() * 0.25), k).multiplyScalar(hide)));
             const shade = 0.85 + rng() * 0.25; // each one a touch lighter or darker, warmer or cooler
             mesh.setColorAt(i, tint.setRGB(shade * (0.97 + rng() * 0.06), shade, shade * (0.95 + rng() * 0.08)));
         }
@@ -726,10 +734,10 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
             do {
                 z = -2 - rng() * 42; side = rng() < 0.5 ? -1 : 1; d = 1.75 + rng() * 1.5;
                 [cx, w] = river(z);
-            } while (Math.hypot(cx + side * d * w - PAV_X, z - PAV_Z) < 3.5);
+            } while (Math.hypot(cx + side * d * w - CLEAR_X, z - CLEAR_Z) < 3.5);
             q.setFromAxisAngle(Y, rng() * 6.28);
-            const k = 0.85 + rng() * 0.35;
-            mesh.setMatrixAt(i, m4.compose(at.set(cx + side * d * w, bankHeight(1.4) - 0.05, z), q, sc.set(k, k * (0.9 + rng() * 0.2), k)));
+            const k = 0.85 + rng() * 0.35, hide = inPavilion(cx + side * d * w, z, 2.3) ? 0 : 1;
+            mesh.setMatrixAt(i, m4.compose(at.set(cx + side * d * w, bankHeight(1.4) - 0.05, z), q, sc.set(k, k * (0.9 + rng() * 0.2), k).multiplyScalar(hide)));
             const shade = 0.85 + rng() * 0.2;
             mesh.setColorAt(i, tint.setRGB(shade * 0.97, shade, shade));
         }
@@ -803,28 +811,71 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
             do { // anywhere on the sides, but leave the pavilion clear
                 z = 3 - rng() * 52; side = rng() < 0.5 ? -1 : 1; d = near + rng() * spread;
                 [cx, w] = river(z);
-            } while (Math.hypot(cx + side * d * w - PAV_X, z - PAV_Z) < 2.6);
-            const x = cx + side * d * w, k = size * (0.6 + rng() * 0.6);
+            } while (Math.hypot(cx + side * d * w - CLEAR_X, z - CLEAR_Z) < 2.6);
+            const x = cx + side * d * w, k = size * (0.6 + rng() * 0.6), hide = inPavilion(x, z, 1.5 + 0.4 * size) ? 0 : 1;
             q.setFromAxisAngle(Y, rng() * 6.28);
-            mesh.setMatrixAt(i, m4.compose(at.set(x, groundAt(x, z, d) - 0.2, z), q, sc.set(k, k * (0.8 + rng() * 0.4), k)));
+            mesh.setMatrixAt(i, m4.compose(at.set(x, groundAt(x, z, d) - 0.2, z), q, sc.set(k, k * (0.8 + rng() * 0.4), k).multiplyScalar(hide)));
             const shade = 0.82 + rng() * 0.25;
             mesh.setColorAt(i, tint.setRGB(shade * (0.96 + rng() * 0.06), shade, shade * (0.95 + rng() * 0.08)));
         }
         decor.add(mesh);
     }
+
+    // ---- a far band of woods on the hills beyond, so a wide screen sees forest fading into the haze rather than
+    // bare slopes: plain low-detail pines and broadleaf crowns, as they only ever stand far off. Their own random
+    // numbers, so everything above stays where it was.
+    rng = seeded(5150);
+    function farTree(kind: "pine" | "broad") {
+        const parts: THREE.BufferGeometry[] = [], bark = pick(BARK);
+        if (kind === "pine") {
+            const H = 2.6 + rng() * 1.6;
+            parts.push(painted(new THREE.CylinderGeometry(0.08, 0.14, H * 0.4, 5).translate(0, H * 0.2, 0), bark));
+            for (let k = 0; k < 3; k++) { // tiers narrowing upwards
+                const r = (0.95 - k * 0.25) * (0.9 + rng() * 0.2);
+                parts.push(painted(new THREE.ConeGeometry(r, H * 0.38, 7).translate(0, H * (0.49 + k * 0.22), 0), pick(FOLIAGE.pine)));
+            }
+        } else {
+            const H = 2.4 + rng() * 1.4;
+            parts.push(painted(new THREE.CylinderGeometry(0.07, 0.13, H * 0.6, 5).translate(0, H * 0.3, 0), bark));
+            for (let k = 0; k < 5; k++) { // a crown of lumps round a middle one
+                const a = rng() * 6.28, d = k ? 0.45 + rng() * 0.3 : 0, r = k ? 0.55 + rng() * 0.3 : 0.85;
+                parts.push(painted(new THREE.IcosahedronGeometry(r, 1).scale(1, 0.8, 1)
+                    .translate(Math.cos(a) * d, H * (k ? 0.75 + rng() * 0.2 : 0.95), Math.sin(a) * d), pick(FOLIAGE.jade)));
+            }
+        }
+        return mergeGeometries(parts)!;
+    }
+    for (const [geo, n] of [[farTree("pine"), 55], [farTree("pine"), 45], [farTree("broad"), 55], [farTree("broad"), 45]] as const) {
+        const count = Math.round(n * (small ? 0.5 : 1)), mesh = new THREE.InstancedMesh(geo, treeMat, count);
+        for (let i = 0; i < count; i++) {
+            const z = 8 - rng() * 75, side = rng() < 0.5 ? -1 : 1, d = 6.5 + rng() * 8, [cx, w] = river(z), x = cx + side * d * w;
+            const k = 0.8 + rng() * 0.7;
+            q.setFromAxisAngle(Y, rng() * 6.28);
+            mesh.setMatrixAt(i, m4.compose(at.set(x, groundAt(x, z, d) - 0.15, z), q, sc.set(k, k * (0.85 + rng() * 0.35), k)));
+            const shade = 0.75 + rng() * 0.25;
+            mesh.setColorAt(i, tint.setRGB(shade * 0.96, shade, shade));
+        }
+        decor.add(mesh);
+    }
     rng = mainRng;
 
-    // ---- stone lanterns on the banks: base, pillar, a lamp box that glows at night, a curved roof and a jewel
-    const STONE = "#8d8a80";
-    const lantern = mergeGeometries([
-        painted(new THREE.CylinderGeometry(0.2, 0.25, 0.1, 6).translate(0, 0.05, 0), STONE),
-        painted(new THREE.CylinderGeometry(0.065, 0.085, 0.5, 6).translate(0, 0.35, 0), STONE),
-        painted(new THREE.CylinderGeometry(0.21, 0.15, 0.08, 6).translate(0, 0.64, 0), STONE),
-        ...[[-1, -1], [-1, 1], [1, -1], [1, 1]].map(([x, z]) => painted(new THREE.BoxGeometry(0.04, 0.2, 0.04).translate(x * 0.09, 0.78, z * 0.09), STONE)),
-        painted(new THREE.CylinderGeometry(0.3, 0.3, 0.035, 6).translate(0, 0.895, 0), STONE),
-        painted(new THREE.ConeGeometry(0.27, 0.17, 6).translate(0, 0.995, 0), STONE),
-        painted(new THREE.SphereGeometry(0.045, 8, 6).translate(0, 1.1, 0), STONE),
-    ])!;
+    // The bridge, lanterns and pavilion are built in Blender (scripts/blender): one mesh each, every part's
+    // colour with ambient occlusion baked in, and the wood grain's aWood as painted() would set it (exported as
+    // _AWOOD). They're drawn with the scene's own materials, so they fade, dim at night and show grain as before.
+    const loadModel = (url: string, use: (geo: THREE.BufferGeometry) => void) => new GLTFLoader().load(url, (gltf) => {
+        if (disposed) return;
+        let src: THREE.Mesh | undefined;
+        gltf.scene.traverse((o) => { if ((o as THREE.Mesh).isMesh) src = o as THREE.Mesh; });
+        if (!src) return;
+        const geo = src.geometry;
+        geo.setAttribute("aWood", geo.getAttribute("_awood"));
+        geo.deleteAttribute("_awood");
+        geo.computeVertexNormals(); // the files leave them out: the materials shade flat
+        use(geo);
+    });
+
+    // ---- stone lanterns on the banks (scripts/blender/lantern.py), each with a paper lamp box in its light
+    // box that glows at night
     const lanternMat = solid();
     dimmed.push([lanternMat, 0.4]);
     const lampMat = new THREE.MeshBasicMaterial({ color: "#e9dcc0", transparent: true }); // paper windows, lit from inside at night
@@ -843,9 +894,11 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
         return t;
     })();
     const glowMat = new THREE.SpriteMaterial({ map: glowTexture, transparent: true, depthWrite: false, opacity: 0 });
+    const lanterns: THREE.Group[] = [];
     for (const [side, d, z] of [[-1, 1.28, BRIDGE_Z - 1.4], [1, 1.3, -6.5], [-1, 1.32, -11.5]]) {
         const [cx, w] = river(z), x = cx + side * d * w, y = bankHeight(d) - 0.04;
-        const stone = new THREE.Mesh(lantern, lanternMat);
+        const stone = new THREE.Group(); // the stone itself joins it once loaded
+        lanterns.push(stone);
         stone.position.set(x, y, z);
         stone.scale.setScalar(1.25);
         stone.rotation.y = rng();
@@ -857,83 +910,32 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
         stone.add(lamp, glow);
         decor.add(stone);
     }
+    loadModel("/models/lantern/lantern.glb", (geo) => { for (const stone of lanterns) stone.add(new THREE.Mesh(geo, lanternMat)); });
 
-    // ---- a red arched bridge (taiko-bashi) across the stream: a curved plank deck on vermilion piers,
-    // railings with posts, and bronze onion-shaped caps (giboshi) on the end posts
-    {
-        const VERMILION = "#b8342a", PLANK = "#6e4a33", BRONZE = "#a8873e";
-        const SPAN = 9.4, RISE = 0.95, WIDE = 0.62, SEGS = 28, BANK = 0.42;
-        const deckY = (x: number) => BANK + RISE * (1 - (2 * x / SPAN) ** 2) - 0.05;
-        const parts: THREE.BufferGeometry[] = [];
-        // a box from (x0,y0) to (x1,y1) along the arch, w deep and t thick, its top at those points
-        // timber: lacquered, the grain along the beam unless given (the planks' runs across the deck)
-        const along = (x0: number, x1: number, y0: number, y1: number, t: number, w: number, z: number, color: string,
-            wood = { axis: new THREE.Vector3(x1 - x0, y1 - y0, 0), amount: 0.55 }) => {
-            const len = Math.hypot(x1 - x0, y1 - y0);
-            return painted(new THREE.BoxGeometry(len, t, w).translate(0, -t / 2, 0).rotateZ(Math.atan2(y1 - y0, x1 - x0))
-                .translate((x0 + x1) / 2, (y0 + y1) / 2, z), color, wood);
-        };
-        const upright = { axis: Y_UP, amount: 0.55 }, crosswise = { axis: Z_AXIS, amount: 0.55 };
-        for (let i = 0; i < SEGS; i++) {
-            const x0 = -SPAN / 2 + (i / SEGS) * SPAN, x1 = x0 + SPAN / SEGS;
-            parts.push(along(x0, x1, deckY(x0), deckY(x1), 0.06, WIDE * 2, 0, PLANK, { axis: Z_AXIS, amount: 1 })); // bare planks
-            parts.push(along(x0, x1, deckY(x0) - 0.06, deckY(x1) - 0.06, 0.1, 0.06, WIDE, VERMILION), // side beams
-                along(x0, x1, deckY(x0) - 0.06, deckY(x1) - 0.06, 0.1, 0.06, -WIDE, VERMILION));
-            for (const z of [WIDE, -WIDE]) { // top rail and a lower rail
-                parts.push(along(x0, x1, deckY(x0) + 0.36, deckY(x1) + 0.36, 0.04, 0.05, z, VERMILION),
-                    along(x0, x1, deckY(x0) + 0.18, deckY(x1) + 0.18, 0.025, 0.03, z, VERMILION));
-            }
-        }
-        for (let i = 0; i <= SEGS; i += 4) { // railing posts, with caps on the four end posts
-            const x = -SPAN / 2 + (i / SEGS) * SPAN, y = deckY(x), end = i === 0 || i === SEGS;
-            for (const z of [WIDE, -WIDE]) {
-                parts.push(painted(new THREE.BoxGeometry(0.07, 0.42, 0.07).translate(x, y + 0.19, z), VERMILION, upright));
-                if (end) {
-                    parts.push(painted(new THREE.SphereGeometry(0.055, 10, 8).scale(1, 1.15, 1).translate(x, y + 0.46, z), BRONZE),
-                        painted(new THREE.ConeGeometry(0.03, 0.08, 8).translate(x, y + 0.55, z), BRONZE));
-                }
-            }
-        }
-        for (const x of [-2.9, -1.2, 1.2, 2.9]) { // piers standing in the stream, braced across
-            const top = deckY(x) - 0.12;
-            for (const z of [WIDE - 0.08, -WIDE + 0.08]) parts.push(painted(new THREE.CylinderGeometry(0.06, 0.07, top + 1.2, 8).translate(x, (top - 1.2) / 2, z), VERMILION, upright));
-            parts.push(painted(new THREE.BoxGeometry(0.08, 0.08, WIDE * 2).translate(x, top - 0.05, 0), VERMILION, crosswise),
-                painted(new THREE.BoxGeometry(0.06, 0.06, WIDE * 2).translate(x, Math.min(0.1, top - 0.4), 0), VERMILION, crosswise));
-        }
-        const mat = solid();
-        woodify(mat);
-        dimmed.push([mat, 0.35]);
-        const bridge = new THREE.Mesh(mergeGeometries(parts)!, mat);
-        const [cx] = river(BRIDGE_Z);
-        bridge.position.set(cx, 0, BRIDGE_Z);
-        bridge.rotation.y = Math.atan2(river(BRIDGE_Z + 0.5)[0] - river(BRIDGE_Z - 0.5)[0], 1); // square across the current
-        decor.add(bridge);
-    }
+    // ---- a red arched bridge (taiko-bashi) across the stream (scripts/blender/bridge.py): a plank deck on
+    // vermilion side beams and braced piers, balustrades with bronze caps, and onion-shaped giboshi on the end
+    // posts. Its arch spans 9.4 along x, rising 0.95 above the banks.
+    const bridgeMat = solid();
+    woodify(bridgeMat);
+    dimmed.push([bridgeMat, 0.35]);
+    const bridge = new THREE.Group(); // placed now, while river() is still the hero view's stream
+    bridge.position.set(river(BRIDGE_Z)[0], 0, BRIDGE_Z);
+    bridge.rotation.y = Math.atan2(river(BRIDGE_Z + 0.5)[0] - river(BRIDGE_Z - 0.5)[0], 1); // square across the current
+    decor.add(bridge);
+    loadModel("/models/bridge/bridge.glb", (geo) => { bridge.add(new THREE.Mesh(geo, bridgeMat)); });
 
-    // ---- a red pavilion upstream on the far bank, half lost in the mist
-    const RED = "#9e2b24", ROOF = "#3f3d3b";
-    const roofCurve = [[0.02, 1.2], [0.2, 1.05], [0.55, 0.62], [0.95, 0.3], [1.3, 0.14], [1.52, 0.24]] // eaves turn up at the edge
-        .map(([r, y]) => new THREE.Vector2(r, y));
-    const pavilion = new THREE.Mesh(mergeGeometries([
-        painted(new THREE.CylinderGeometry(1.2, 1.3, 0.5, 6).translate(0, -0.05, 0), "#8a857c"),
-        ...Array.from({ length: 6 }, (_, i) => {
-            const a = (i / 6) * Math.PI * 2;
-            return painted(new THREE.CylinderGeometry(0.06, 0.06, 1.45, 8).translate(Math.cos(a) * 0.9, 0.92, Math.sin(a) * 0.9), RED, { axis: Y_UP, amount: 0.55 });
-        }),
-        painted(new THREE.CylinderGeometry(0.98, 0.98, 0.14, 6).translate(0, 1.6, 0), RED, { axis: X_AXIS, amount: 0.45 }),
-        painted(new THREE.CylinderGeometry(0.95, 0.95, 0.06, 6, 1, true).translate(0, 0.45, 0), RED, { axis: X_AXIS, amount: 0.45 }), // low railing
-        painted(new THREE.LatheGeometry(roofCurve, 6).translate(0, 1.55, 0), ROOF),
-        painted(new THREE.ConeGeometry(0.07, 0.4, 6).translate(0, 2.9, 0), ROOF),
-        painted(new THREE.SphereGeometry(0.08, 8, 6).translate(0, 2.72, 0), ROOF),
-    ])!, solid());
-    woodify(pavilion.material as THREE.MeshLambertMaterial);
-    dimmed.push([pavilion.material as THREE.MeshLambertMaterial, 0.3]);
-    {
+    // ---- a red double-eaved pavilion upstream on the far bank, half lost in the mist
+    // (scripts/blender/pavilion.py). Its steps face the camera.
+    const pavilionMat = solid();
+    woodify(pavilionMat);
+    dimmed.push([pavilionMat, 0.3]);
+    loadModel("/models/pavilion/pavilion.glb", (geo) => {
+        const pavilion = new THREE.Mesh(geo, pavilionMat);
         pavilion.position.set(PAV_X, 0.42, PAV_Z);
         pavilion.scale.setScalar(0.75);
         pavilion.rotation.y = -0.3;
         decor.add(pavilion);
-    }
+    });
 
     // ---- mountains far upstream, after Chinese landscape painting: tall, round-topped karst peaks in three
     // ridges, each further one paler, their feet lost in the mist. They stand beyond the haze and the world's
@@ -1285,10 +1287,10 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
         const thick = 1 - 0.75 * haze, thin = 1 - 0.55 * haze; // the mist closes in while the camera is in the clouds
         u.uFogNear.value = mix(HAZE[0], topH * 2.5, e) * thick; u.uFogFar.value = mix(HAZE[1], topH * 5, e) * thin;
         fog.near = mix(LIT_HAZE[0], topH * 2.5, e) * thick; fog.far = mix(LIT_HAZE[1], topH * 5, e) * thin;
-        u.uBank.value.set(mix(3.5, 1.32, banks), mix(9, 1.72, banks));
+        u.uBank.value.set(mix(BANK_FADE[0], 1.32, banks), mix(BANK_FADE[1], 1.72, banks));
         // From above the banks have faded to the page's colour a few units out, and the clear colour is that
         // colour too: no need to shade the land beyond them.
-        u.uSpread.value = Math.min(1, (u.uBank.value.y * Math.max(3.2, path ? path.ws[0] : 0) * 1.15) / 30);
+        u.uSpread.value = Math.min(1, (u.uBank.value.y * Math.max(3.2, path ? path.ws[0] : 0) * 1.15) / GROUND_W);
         u.uPointK.value = mix(7, topH * 0.3, e);
         terrain.position.z = snap(zc, LEN / groundSeg[1]);
         water.position.z = snap(zc, LEN / waterSeg[1]);
