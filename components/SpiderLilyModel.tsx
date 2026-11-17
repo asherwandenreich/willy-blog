@@ -279,22 +279,31 @@ const branchPoint = (t: Tree, b: Branch, along: number) => {
     return new Vector3(p.x + k, b.y0 + p.y, p.z + k * 0.4).applyMatrix4(placeOf(t));
 };
 
-// Every trunk and branch merged into one shape.
-function makeTrunks() {
+// Trunks nearer than this are the detailed ones built in Blender (scripts/blender/trunks.py, three of them shared
+// round): furrowed bark, buttress roots and burls, darkened where light can't reach. They follow the same shape
+// as the simple tapered cylinders the trees further off in the haze use, so the ivy and branches sit on either.
+const NEAR_TREE_Z = -14;
+
+// The trunks and branches merged into two shapes: the detailed near trunks, and everything else.
+function makeTrunks(detailed: BufferGeometry[]) {
     const up = new Vector3(0, 1, 0);
     const dark = new Color("#221f1a");
     const light = new Color("#5f5a4d");
     const moss = new Color("#56663a");
 
-    const shapes = trees.flatMap((t) => {
+    const near: BufferGeometry[] = [];
+    const shapes = trees.flatMap((t, n) => {
         const base = dark.clone().lerp(light, t.shade);
 
-        // Bark: vertical streaks around the trunk, moss low down on one side.
+        // Bark: moss low down on one side, and (on the simple trunks) vertical streaks around it.
+        const tint = (x: number, y: number, z: number) => {
+            const a = Math.atan2(z, x);
+            const mossy = Math.min(1, Math.max(0, (1.1 - y * 0.1 + Math.cos(a - t.phase) * 0.6) * t.moss));
+            return base.clone().lerp(moss, mossy);
+        };
         const barkColor = (x: number, y: number, z: number) => {
             const a = Math.atan2(z, x);
-            const streak = 0.72 + 0.18 * Math.sin(a * 7 + t.phase * 3) + 0.1 * Math.sin(a * 17 + y * 0.8);
-            const mossy = Math.min(1, Math.max(0, (1.1 - y * 0.1 + Math.cos(a - t.phase) * 0.6) * t.moss));
-            return base.clone().lerp(moss, mossy).multiplyScalar(streak);
+            return tint(x, y, z).multiplyScalar(0.72 + 0.18 * Math.sin(a * 7 + t.phase * 3) + 0.1 * Math.sin(a * 17 + y * 0.8));
         };
         const colorize = (g: BufferGeometry, yOffset: number) => {
             const pos = g.attributes.position;
@@ -306,16 +315,39 @@ function makeTrunks() {
             g.setAttribute("color", new Float32BufferAttribute(colors, 3));
         };
 
-        // trunk: tapered, flared at the base, gently bent
-        const trunk = new CylinderGeometry(t.radius * 0.55, t.radius, TRUNK_HEIGHT, 10, 16, true);
-        trunk.translate(0, TRUNK_HEIGHT / 2, 0);
-        colorize(trunk, 0);
-        const pos = trunk.attributes.position;
-        for (let i = 0; i < pos.count; i++) {
-            const y = pos.getY(i);
-            pos.setXYZ(i, pos.getX(i) * flareAt(y) + bendAt(t, y), y, pos.getZ(i) * flareAt(y) + bendAt(t, y) * 0.4);
+        const isNear = t.z > NEAR_TREE_Z && detailed.length > 0;
+        if (isNear) {
+            // a detailed trunk, turned, sized to this tree, its grey (furrows, shading) over this tree's bark, then bent
+            const src = detailed[n % detailed.length], sp = src.getAttribute("position"), grey = src.getAttribute("color");
+            const turn = t.phase * 1.7, cos = Math.cos(turn), sin = Math.sin(turn);
+            const positions = new Float32Array(sp.count * 3), colors = new Float32Array(sp.count * 3);
+            for (let i = 0; i < sp.count; i++) {
+                const y = sp.getY(i);
+                const x = (sp.getX(i) * cos - sp.getZ(i) * sin) * t.radius, z = (sp.getX(i) * sin + sp.getZ(i) * cos) * t.radius;
+                const c = tint(x, y, z).multiplyScalar(grey.getX(i) * 1.3);
+                colors.set([c.r, c.g, c.b], i * 3);
+                positions.set([x + bendAt(t, y), y, z + bendAt(t, y) * 0.4], i * 3);
+            }
+            const trunk = new BufferGeometry();
+            trunk.setIndex(src.index);
+            trunk.setAttribute("position", new Float32BufferAttribute(positions, 3));
+            trunk.setAttribute("color", new Float32BufferAttribute(colors, 3));
+            trunk.computeVertexNormals();
+            near.push(trunk.applyMatrix4(placeOf(t)));
         }
-        const parts: BufferGeometry[] = [trunk];
+        const parts: BufferGeometry[] = [];
+        if (!isNear) {
+            // a simple trunk: tapered, flared at the base, gently bent
+            const trunk = new CylinderGeometry(t.radius * 0.55, t.radius, TRUNK_HEIGHT, 10, 16, true);
+            trunk.translate(0, TRUNK_HEIGHT / 2, 0);
+            colorize(trunk, 0);
+            const pos = trunk.attributes.position;
+            for (let i = 0; i < pos.count; i++) {
+                const y = pos.getY(i);
+                pos.setXYZ(i, pos.getX(i) * flareAt(y) + bendAt(t, y), y, pos.getZ(i) * flareAt(y) + bendAt(t, y) * 0.4);
+            }
+            parts.push(trunk);
+        }
 
         for (const b of t.branches) {
             const g = new CylinderGeometry(b.radius * 0.2, b.radius, b.length, 6, 4, true);
@@ -333,16 +365,19 @@ function makeTrunks() {
         }
         return parts;
     });
-    return mergeGeometries(shapes)!;
+    return [mergeGeometries(near)!, mergeGeometries(shapes)!];
 }
 
 function Trunks() {
-    const shape = useMemo(() => makeTrunks(), []);
-    return (
-        <mesh geometry={shape}>
-            <meshStandardMaterial vertexColors roughness={1} />
-        </mesh>
-    );
+    const { scene } = useGLTF("/models/trunks/trunks.glb");
+    const shapes = useMemo(() => {
+        const detailed: Mesh[] = [];
+        scene.traverse((o) => { if ((o as Mesh).isMesh) detailed.push(o as Mesh); });
+        detailed.sort((a, b) => a.name.localeCompare(b.name)); // trunk_0 to trunk_2
+        return makeTrunks(detailed.map((m) => m.geometry));
+    }, [scene]);
+    const material = useMemo(() => new MeshStandardMaterial({ vertexColors: true, roughness: 1 }), []);
+    return shapes.map((shape, i) => <mesh key={i} geometry={shape} material={material} />);
 }
 
 // ---------- leaves ----------
@@ -528,11 +563,11 @@ export default function SpiderLilyModel({ onReady }: { onReady?: () => void }) {
             <directionalLight position={[3, 6, 8]} intensity={look.front.intensity} color={look.front.color} />
             {night && <Fireflies />}
             <Ground color={look.ground} />
-            <Trunks />
             <Leaves glow={look.leafGlow} />
             <Grass />
             <FarLilies />
             <Suspense fallback={null}>
+                <Trunks />
                 <NearLilies />
                 <SceneReady onReady={onReady} />
             </Suspense>

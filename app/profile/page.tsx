@@ -8,6 +8,10 @@ import SignOutButton from "@/components/SignOutButton";
 import PostForm from "@/components/PostForm";
 import MessageForm from "@/components/MessageForm";
 import ReviewButtons from "@/components/ReviewButtons";
+import CollegeHub from "@/components/CollegeHub";
+import CollegeModel from "@/lib/CollegeModel";
+import { COLLEGE_SEED } from "@/lib/collegeSeed";
+import type { College } from "@/lib/college";
 import Backend from "@/components/Backend";
 import { BackendLink } from "@/components/BackendLink";
 import { requestBlog } from "./actions";
@@ -40,6 +44,19 @@ async function BlogRequests() {
   </>);
 }
 
+// Admins: the college application tracker. The first visit fills it from lib/collegeSeed.ts.
+async function loadColleges(): Promise<College[]> {
+  await dbConnect();
+  if (!(await CollegeModel.exists({}))) await CollegeModel.insertMany(COLLEGE_SEED.map((c, order) => ({ ...c, order })));
+  type Doc = Omit<College, "id" | "tasks"> & { _id: unknown; tasks: (Omit<College["tasks"][number], "id"> & { _id: unknown })[] };
+  const docs = (await CollegeModel.find().sort({ order: 1, createdAt: 1 }).lean()) as unknown as Doc[];
+  return docs.map((c) => ({
+    id: String(c._id), name: c.name, plan: c.plan || undefined, deadline: c.deadline || undefined, portal: c.portal || undefined,
+    status: c.status, link: c.link || undefined, notes: c.notes || undefined,
+    tasks: c.tasks.map((t) => ({ id: String(t._id), text: t.text, due: t.due || undefined, done: Boolean(t.done), details: t.details || undefined, link: t.link || undefined })),
+  }));
+}
+
 export default async function Profile({ searchParams }: PageProps<"/profile">) {
   const auth = await initAuth();
   const session = await auth.api.getSession({ headers: await headers() });
@@ -48,10 +65,17 @@ export default async function Profile({ searchParams }: PageProps<"/profile">) {
   const admin = ADMIN_EMAILS.includes(session.user.email);
   // the sidebar's choices; ?tab= picks which one fills the main area
   const tabs = admin
-    ? [{ tab: "", label: "Home" }, { tab: "requests", label: "Blog requests" }, { tab: "backend", label: "Backend" }]
+    ? [{ tab: "", label: "Home" }, { tab: "requests", label: "Blog requests" }, { tab: "college", label: "College" }, { tab: "backend", label: "Backend" }]
     : [{ tab: "", label: "Home" }, { tab: "contribute", label: "Contribute a blog" }, { tab: "message", label: "Send a message" }];
-  const asked = (await searchParams).tab;
+  const params = await searchParams;
+  const asked = params.tab;
   const current = tabs.find((t) => t.tab === asked)?.tab ?? "";
+
+  // the College page's own tab row picks the school (?school=)
+  const colleges = current === "college" ? await loadColleges() : [];
+  const school = typeof params.school === "string" ? params.school : "";
+  // "today" in California, so days-left counts match the calendar on the wall
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
 
   return (
     <main className="flex-1 flex flex-col sm:flex-row">
@@ -87,6 +111,7 @@ export default async function Profile({ searchParams }: PageProps<"/profile">) {
             <MessageForm />
           </>)}
           {current === "requests" && <BlogRequests />}
+          {current === "college" && <CollegeHub colleges={colleges} today={today} school={school} />}
           {current === "backend" && <Backend />}
         </div>
       </section>

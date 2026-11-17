@@ -18,7 +18,9 @@
   & button { font: inherit; letter-spacing: inherit; text-transform: inherit; color: inherit; cursor: pointer }
 
   /* ---------- scene ---------- */
-  & .farm { position: fixed; inset: 0; width: 100%; height: 100%; animation: rb-focus 2.4s var(--ease) both }
+  & .farm { position: fixed; inset: 0; overflow: hidden; animation: rb-focus 2.4s var(--ease) both }
+  /* the painted sky and floor behind, the 3D farm over it */
+  & .farm canvas { position: absolute; top: 0; left: 0 }
   /* haze on the left so the log reads cleanly over the racks */
   & .mist { position: fixed; inset: 0; pointer-events: none;
     background: linear-gradient(90deg, rgba(246,249,245,.62), rgba(246,249,245,.2) 38%, transparent 60%) }

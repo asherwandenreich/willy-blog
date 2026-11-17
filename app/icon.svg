@@ -1,0 +1,18 @@
+<!-- The tab icon: the spider lily from the loading screen (components/LilyBackground.tsx), drawn bolder so it reads at 16px -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-31 -31 62 62">
+<g fill="none" stroke="#c81e2c" stroke-width="3.4" stroke-linecap="round">
+  <path d="M0 0Q14.03 9.60 26.00 0.00"/>
+  <circle cx="26.00" cy="0.00" r="3.6" fill="#c81e2c" stroke="none"/>
+  <path d="M0 0Q-1.30 16.95 13.00 22.52"/>
+  <circle cx="13.00" cy="22.52" r="3.6" fill="#c81e2c" stroke="none"/>
+  <path d="M0 0Q-15.33 7.35 -13.00 22.52"/>
+  <circle cx="-13.00" cy="22.52" r="3.6" fill="#c81e2c" stroke="none"/>
+  <path d="M0 0Q-14.03 -9.60 -26.00 0.00"/>
+  <circle cx="-26.00" cy="0.00" r="3.6" fill="#c81e2c" stroke="none"/>
+  <path d="M0 0Q1.30 -16.95 -13.00 -22.52"/>
+  <circle cx="-13.00" cy="-22.52" r="3.6" fill="#c81e2c" stroke="none"/>
+  <path d="M0 0Q15.33 -7.35 13.00 -22.52"/>
+  <circle cx="13.00" cy="-22.52" r="3.6" fill="#c81e2c" stroke="none"/>
+</g>
+<circle r="6" fill="#9e1020"/>
+</svg>
