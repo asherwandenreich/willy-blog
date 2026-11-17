@@ -7,6 +7,7 @@ import { headers } from "next/headers";
 import Link from "next/link";
 import PostMenu from "@/components/PostMenu";
 import Cover from "@/components/Cover";
+import RedactedText from "@/components/RedactedText";
 import AboutEditor from "@/components/AboutEditor";
 import RiverBackground from "@/components/RiverBackground";
 import "./timeline.css";
@@ -34,7 +35,7 @@ function PostCard({ post, admin, side }: { post: PostType; admin: boolean; side:
         />
         {/* padding goes on a wrapper: on the clamped paragraph itself, the cut-off line shows through it */}
         <div className="px-4 pb-4 pt-2">
-          <p className="line-clamp-4 whitespace-pre-wrap text-[15px] leading-snug">{post.content.join("\n\n")}</p>
+          <p className="line-clamp-4 whitespace-pre-wrap text-[15px] leading-snug"><RedactedText text={post.content.join("\n\n")} admin={admin} /></p>
         </div>
         {admin && <PostMenu id={post.id} title={post.title} image={post.image} />}
       </article>
