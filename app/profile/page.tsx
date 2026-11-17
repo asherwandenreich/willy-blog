@@ -11,7 +11,7 @@ import ReviewButtons from "@/components/ReviewButtons";
 import CollegeHub from "@/components/CollegeHub";
 import CollegeModel from "@/lib/CollegeModel";
 import { COLLEGE_SEED } from "@/lib/collegeSeed";
-import { isSchool, type College } from "@/lib/college";
+import type { College } from "@/lib/college";
 import { requestBlog } from "./actions";
 
 const heading = "mt-10 mb-6 text-4xl font-bold";
@@ -69,28 +69,21 @@ export default async function Profile({ searchParams }: PageProps<"/profile">) {
   const asked = params.tab;
   const current = tabs.find((t) => t.tab === asked)?.tab ?? "";
 
-  // College gets a tab per school under it (groups like "Every application" stay on its overview)
-  const colleges = admin ? await loadColleges() : [];
-  const schools = colleges.filter(isSchool);
-  const school = current === "college" ? schools.find((c) => c.id === params.school)?.id ?? "" : "";
-  const links = tabs.flatMap((t) => [
-    { key: t.tab, label: t.label, href: t.tab ? `/profile?tab=${t.tab}` : "/profile", active: t.tab === current && !school, sub: false },
-    ...(t.tab === "college"
-      ? schools.map((c) => ({ key: c.id, label: c.name, href: `/profile?tab=college&school=${c.id}`, active: c.id === school, sub: true }))
-      : []),
-  ]);
+  // the College page's own tab row picks the school (?school=)
+  const colleges = current === "college" ? await loadColleges() : [];
+  const school = typeof params.school === "string" ? params.school : "";
   // "today" in California, so days-left counts match the calendar on the wall
   const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
 
   return (
     <main className="flex-1 flex flex-col sm:flex-row">
       <aside className="sm:w-56 shrink-0 flex sm:flex-col gap-1 p-3 border-b sm:border-b-0 sm:border-r border-zinc-200 dark:border-zinc-800 overflow-x-auto">
-        {links.map((t) => (
+        {tabs.map((t) => (
           <Link
-            key={t.key}
-            href={t.href}
-            aria-current={t.active ? "page" : undefined}
-            className={`shrink-0 rounded-lg px-3 py-2 text-sm transition-colors ${t.sub ? "sm:ml-4" : ""} ${t.active
+            key={t.tab}
+            href={t.tab ? `/profile?tab=${t.tab}` : "/profile"}
+            aria-current={t.tab === current ? "page" : undefined}
+            className={`shrink-0 rounded-lg px-3 py-2 text-sm transition-colors ${t.tab === current
               ? "bg-zinc-100 dark:bg-zinc-900 font-bold"
               : "text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900 dark:hover:bg-zinc-950 dark:hover:text-zinc-100"}`}
           >

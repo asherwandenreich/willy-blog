@@ -232,8 +232,8 @@ export default function CollegeHub({ colleges, today, school }: { colleges: Coll
         </div>
     );
 
-    // One tab per college (the same ones listed under College in the profile sidebar); groups like
-    // "Every application" stay on Overview. Tabs are links, so the address and the sidebar always match.
+    // One tab per college; groups like
+    // "Every application" stay on Overview. Tabs are links, so the open one is kept in the address.
     const schools = list.filter((c) => isSchool(c) && !isTemp(c.id));
     const open = schools.find((c) => c.id === school);
     const href = (id: string) => (id ? `/profile?tab=college&school=${id}` : "/profile?tab=college");
