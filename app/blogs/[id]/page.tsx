@@ -2,7 +2,7 @@ import type { PostType } from "@/app/post/actions";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import Link from "next/link";
-import Post from "@/lib/PostModel";
+import Post, { byline } from "@/lib/PostModel";
 import dbConnect from "@/lib/mongoose";
 import { initAuth, ADMIN_EMAILS } from "@/lib/auth";
 import Cover from "@/components/Cover";
@@ -23,7 +23,7 @@ async function Page({ params }: { params: Promise<{ id: string }> }) {
         image={post.image}
         className="mt-10 mb-6"
         title={post.title}
-        sub={post.date.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
+        sub={byline(post, "long")}
       />
       {admin && (
         <Link href={`/post?edit=${encodeURIComponent(post.id)}`}

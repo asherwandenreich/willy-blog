@@ -4,20 +4,24 @@ import type { PostType } from "@/app/post/actions";
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import ImagePicker from "./ImagePicker";
+import { NAME_MAX } from "@/lib/names";
 
 const submit = "rounded-full px-5 py-2 bg-black dark:bg-white text-white dark:text-black hover:opacity-80 disabled:opacity-50";
 const field = "w-full rounded-lg border border-zinc-200 dark:border-zinc-800 bg-transparent px-3 py-2";
 
 // request: for non-admins, who send the post to Willy to look over instead of publishing it
 // initial: a published post being edited (postBlog then saves the changes)
+// author: who a new post is by to begin with (the admin's own name); admins can change it in the form
 function PostForm({
     postBlog,
     request = false,
     initial,
+    author,
 }: {
     postBlog: (post: PostType) => Promise<void>;
     request?: boolean;
     initial?: PostType;
+    author?: string;
 }) {
     const router = useRouter();
     const [newPost, setNewPost] = useState<PostType>(initial ?? {
@@ -25,6 +29,7 @@ function PostForm({
         date: new Date(),
         title: "",
         content: [""],
+        ...(author ? { author } : {}),
     });
     const [posting, setPosting] = useState(false);
     const [error, setError] = useState("");
@@ -86,6 +91,17 @@ function PostForm({
                 value={newPost.title}
                 onChange={(e) => setNewPost({ ...newPost, title: e.target.value })}
             />
+            {!request && (
+                <input
+                    type="text"
+                    placeholder="Author"
+                    aria-label="Author"
+                    maxLength={NAME_MAX}
+                    className={`${field} text-sm`}
+                    value={newPost.author ?? ""}
+                    onChange={(e) => setNewPost({ ...newPost, author: e.target.value })}
+                />
+            )}
             {newPost.content.map((paragraph, i) => (
                 <div key={i} className="relative">
                 <textarea

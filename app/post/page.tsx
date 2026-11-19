@@ -2,7 +2,7 @@ import { initAuth, ADMIN_EMAILS } from "@/lib/auth";
 import { headers } from "next/headers";
 import { postBlog, updatePost, type PostType } from "./actions";
 import { redirect } from "next/navigation";
-import Post from "@/lib/PostModel";
+import Post, { DEFAULT_AUTHOR } from "@/lib/PostModel";
 import dbConnect from "@/lib/mongoose";
 import PostForm from "@/components/PostForm";
 
@@ -19,14 +19,14 @@ async function Page({ searchParams }: PageProps<"/post">) {
         const p = await Post.findOne({ id: edit }).lean<PostType>();
         if (!p) redirect("/blogs");
         // only plain fields: the database's own (_id and such) can't be handed to the browser
-        initial = { id: p.id, date: p.date, title: p.title, content: p.content, ...(p.image ? { image: p.image } : {}) };
+        initial = { id: p.id, date: p.date, title: p.title, content: p.content, author: p.author || DEFAULT_AUTHOR, ...(p.image ? { image: p.image } : {}) };
     }
 
     return(
         <main>
             <div className="max-w-2xl mx-auto">
                 <h1 className="mt-3 text-4xl font-bold">{initial ? "Edit post" : "New post"}</h1>
-                <PostForm key={initial?.id ?? "new"} postBlog={initial ? updatePost : postBlog} initial={initial} />
+                <PostForm key={initial?.id ?? "new"} postBlog={initial ? updatePost : postBlog} initial={initial} author={session.user.name} />
             </div>
         </main>
     );

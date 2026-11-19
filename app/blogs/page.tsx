@@ -1,5 +1,5 @@
 import type { PostType } from "../post/actions";
-import Post from "@/lib/PostModel";
+import Post, { byline } from "@/lib/PostModel";
 import dbConnect from "@/lib/mongoose";
 import { initAuth, ADMIN_EMAILS } from "@/lib/auth";
 import { headers } from "next/headers";
@@ -23,7 +23,7 @@ function PostCard({ post, admin, side }: { post: PostType; admin: boolean; side:
           image={post.image}
           className={post.image ? "" : "px-4 pt-4 pr-12"}
           title={<Link href={`/blogs/${post.id}`} className="after:absolute after:inset-0 after:rounded-2xl">{post.title}</Link>}
-          sub={post.date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+          sub={byline(post, "short")}
         />
         {/* padding goes on a wrapper: on the clamped paragraph itself, the cut-off line shows through it */}
         <div className="px-4 pb-4 pt-2">

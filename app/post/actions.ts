@@ -6,6 +6,7 @@ import { initAuth, ADMIN_EMAILS } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { isImageId, deleteUnusedImage } from "@/lib/ImageModel";
+import { NAME_MAX } from "@/lib/names";
 
 export interface PostType {
     id: string;
@@ -13,7 +14,10 @@ export interface PostType {
     title: string;
     content: string[];
     image?: string;
+    author?: string;
 }
+
+const authorOf = (post: PostType) => String(post.author ?? "").trim().replace(/\s+/g, " ").slice(0, NAME_MAX) || undefined;
 
 export async function postBlog(post: PostType) {
     const auth = await initAuth();
@@ -23,7 +27,7 @@ export async function postBlog(post: PostType) {
     }
     if (post.image !== undefined && !isImageId(post.image)) throw new Error("Bad image");
     await dbConnect();
-    await Post.create(post);
+    await Post.create({ ...post, author: authorOf(post) });
     revalidatePath("/blogs"); // the list is cached (and prerendered on Vercel), so refresh it to show the new post
 
     /* try {
@@ -47,7 +51,7 @@ export async function updatePost(post: PostType) {
     if (!title) throw new Error("A post needs a title");
     await dbConnect();
     const old = await Post.findOneAndUpdate({ id: String(post.id) },
-        { title, content, ...(post.image ? { image: post.image } : { $unset: { image: 1 } }) });
+        { title, content, ...(post.image ? { image: post.image } : { $unset: { image: 1 } }), ...(authorOf(post) ? { author: authorOf(post) } : {}) });
     if (!old) throw new Error("No such post");
     if (old.image !== post.image) await deleteUnusedImage(old.image);
     revalidatePath("/blogs");

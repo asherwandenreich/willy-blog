@@ -4,6 +4,7 @@ import { authClient } from "@/lib/auth-client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import PasswordInput from "@/components/PasswordInput";
+import { NAME_MAX } from "@/lib/names";
 
 interface UserType {
     email: string;
@@ -56,6 +57,7 @@ function SignInForm() {
                     <input
                         placeholder="Name"
                         aria-label="Name"
+                        maxLength={NAME_MAX}
                         className={field}
                         value={user.name}
                         onChange={(e) => setUser({ ...user, name: e.target.value })}
