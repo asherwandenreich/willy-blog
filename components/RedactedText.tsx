@@ -9,11 +9,14 @@ export default function RedactedText({ text, admin }: { text: string; admin: boo
                 {part}
             </mark>
         );
-        // rounded up to whole 6-letter blocks, so the bar doesn't give away the exact length
+        // rounded up to whole 6-letter blocks, so the bar doesn't give away the exact length. A thin, square, soft
+        // grey band through the middle of the line (not a full-height black box), so it doesn't pull the eye.
         const blocks = Array(Math.ceil(part.length / 6)).fill("xxxxx").join(" ");
         return (
             <span key={i} role="img" aria-label="redacted"
-                className="rounded-sm bg-zinc-900 dark:bg-zinc-200 text-transparent select-none [box-decoration-break:clone]">
+                className="text-transparent select-none [box-decoration-break:clone]
+                    bg-[linear-gradient(transparent_17%,rgb(113_113_122/0.4)_17%,rgb(113_113_122/0.4)_83%,transparent_83%)]
+                    dark:bg-[linear-gradient(transparent_17%,rgb(161_161_170/0.35)_17%,rgb(161_161_170/0.35)_83%,transparent_83%)]">
                 {blocks}
             </span>
         );

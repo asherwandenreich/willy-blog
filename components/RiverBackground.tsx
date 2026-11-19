@@ -5,7 +5,7 @@
 // the middle, with pebbles and caustics on the bed, boulders the current foams around, reeds on the banks
 // and leaves riding the surface. Restyled after a Chinese mountain stream: jade water, mossy boulders,
 // bonsai-like trees, stone lanterns and a red pavilion upstream in the mist.
-// The page scroll flies the camera, as on AquaPlot: a low view up the stream behind About me (#river-hero),
+// The page scroll flies the camera, as on AquaPlot: a low view up the stream and its scenery (#river-hero),
 // rising to look straight down on it. From above, the river runs down the channels the posts leave free
 // (#river-flow .ch, see app/blogs/timeline.css), bending from one to the next, and scrolls exactly with the
 // page so the bends stay beside the posts they go round. The trees, lanterns, bridge and pavilion belong to
@@ -166,6 +166,7 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
         uEdge: { value: new THREE.Vector2(EDGE[0], EDGE[1]) }, uBank: { value: new THREE.Vector2(BANK_FADE[0], BANK_FADE[1]) },
         uWin: { value: new THREE.Vector2(WIN[0], WIN[1]) },
         uPath: { value: blankPath }, uPathRange: { value: new THREE.Vector2(0, 1) }, uPathMix: { value: 0 },
+        uTrail: { value: Array.from({ length: 32 }, () => new THREE.Vector2(0, 1e4)) }, // the stone paths, 16 points each (PATHS)
         uNight: { value: 0 }, uPointK: { value: 7 }, uDpr: { value: renderer.getPixelRatio() }, uReflect: { value: 0.8 }, uSpread: { value: 1 },
         uDeep: { value: color() }, uShallow: { value: color() }, uSky: { value: color() }, uSun: { value: color() },
         uFog: { value: color() }, uFoam: { value: color() }, uCaustic: { value: color() },
@@ -384,8 +385,17 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
     reedGeo.instanceCount = REEDS;
     const reeds = new THREE.Mesh(reedGeo, new THREE.ShaderMaterial({
         uniforms, side: THREE.DoubleSide,
-        vertexShader: `uniform float uTime; attribute vec4 aSpot; attribute vec2 aSize; varying float vV, vFade; varying vec3 vCol;
+        vertexShader: `uniform float uTime; uniform vec2 uTrail[32]; attribute vec4 aSpot; attribute vec2 aSize; varying float vV, vFade; varying vec3 vCol;
       ${COMMON} ${MEADOW} ${FADE}
+      float trail(vec2 p) {  // how far p is from the stone paths: two lines of 16 points
+        float d = 1e3;
+        for (int i = 0; i < 31; i++) {
+          if (i == 15) continue;  // the gap between the two paths
+          vec2 a = uTrail[i], ab = uTrail[i + 1] - a;
+          d = min(d, length(p - a - ab * clamp(dot(p - a, ab) / dot(ab, ab), 0.0, 1.0)));
+        }
+        return d;
+      }
       void main() {
         float z = wrapZ(aSpot.z * uWin.y);
         vec2 r = river(z);
@@ -393,8 +403,9 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
         float v = position.y, a = aSpot.w * 6.2831;
         vec3 w = vec3(base.x, ground(base), base.y);
         w.xz += vec2(cos(a), sin(a)) * position.x * aSize.x;
-        w.y += v * aSize.y * (1.0 - 0.95 * crag(base, w.y));  // only a few tufts on the bare rock
-        w.xz += (vec2(aSpot.x * 0.12, 0.08) + vec2(0.0, sin(uTime * 1.7 + aSpot.w * 30.0) * 0.1)) * v * v * aSize.y * 2.0;
+        float tall = aSize.y * smoothstep(0.35, 0.7, trail(base));  // trodden flat on the paths
+        w.y += v * tall * (1.0 - 0.95 * crag(base, w.y));  // only a few tufts on the bare rock
+        w.xz += (vec2(aSpot.x * 0.12, 0.08) + vec2(0.0, sin(uTime * 1.7 + aSpot.w * 30.0) * 0.1)) * v * v * tall * 2.0;
         vV = v;
         float j = fract(aSpot.w * 7.31);  // and each blade leans a little warmer or cooler than its patch
         vCol = mix(meadow(base), j < 0.5 ? uGrassC : uGrassD, 0.45 * fract(aSpot.w * 3.97)) * (0.8 + 0.4 * fract(aSpot.w * 13.7));
@@ -610,7 +621,7 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
     // windswept (every branch blown to one side)
     function tree(style: "upright" | "informal" | "slant" | "windswept", leaves: string[], flat = 0.36) {
         const parts: THREE.BufferGeometry[] = [], bark = pick(BARK);
-        const H = 1.3 + rng() * 1.0, lean = style === "slant" ? 0.7 + rng() * 0.4 : style === "upright" ? 0.08 : (rng() - 0.5) * 0.8;
+        const H = 1.9 + rng() * 1.3, lean = style === "slant" ? 0.7 + rng() * 0.4 : style === "upright" ? 0.08 : (rng() - 0.5) * 0.8;
         const wig = style === "informal" ? 0.4 : 0.12;
         const pts = [v(0, -0.2, 0), v(lean * 0.25 + (rng() - 0.5) * wig, H * 0.3, (rng() - 0.5) * wig),
             v(lean * 0.55 - (rng() - 0.5) * wig, H * 0.62, (rng() - 0.5) * wig), v(lean, H, (rng() - 0.5) * 0.2)];
@@ -667,6 +678,21 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
     // the whole layout) stays as it was; the few that would grow through it where it is now are hidden instead.
     const CLEAR_Z = -11, CLEAR_X = river(CLEAR_Z)[0] + 2.5 * river(CLEAR_Z)[1];
     const inPavilion = (x: number, z: number, r: number) => Math.hypot(x - PAV_X, z - PAV_Z) < r;
+    // A stepping-stone path off each end of the bridge (laid further down): on the right up to the pavilion's
+    // steps, on the left away upstream into the trees. Sampled here so the trees and bushes can keep off it.
+    const BX = river(BRIDGE_Z)[0];
+    const PATHS = [
+        [[BX + 4.5, BRIDGE_Z], [BX + 5.4, -2.6], [PAV_X - 0.9, -5], [PAV_X - 0.3, PAV_Z + 1.4]],
+        [[BX - 4.5, BRIDGE_Z], [BX - 5.6, -2.8], [BX - 6.6, -6.5], [BX - 6.1, -11], [BX - 7.2, -16]],
+    ].map((pts) => new THREE.CatmullRomCurve3(pts.map(([x, z]) => new THREE.Vector3(x, 0, z))));
+    const pathPts = PATHS.flatMap((c) => c.getSpacedPoints(80));
+    const onPath = (x: number, z: number, r: number) => pathPts.some((p) => Math.hypot(x - p.x, z - p.z) < r);
+    // Where each bank tree stands, so bamboo added later can make room for it (see fill); bamboo clumps are told
+    // apart by their geometry.
+    const trunks: { mesh: THREE.InstancedMesh; i: number; x: number; y: number; z: number; q: THREE.Quaternion; s: THREE.Vector3 }[] = [];
+    const canes = new Set<THREE.BufferGeometry>();
+    const cane = () => { const g = bamboo(); canes.add(g); return g; };
+    PATHS.forEach((c, k) => c.getSpacedPoints(15).forEach((p, i) => uniforms.uTrail.value[k * 16 + i].set(p.x, p.z))); // the grass keeps off them
     const treeMat = solid();
     treeMat.onBeforeCompile = (shader) => { // the leaves flutter in a light breeze, each tree out of step
         shader.uniforms.uTime = uniforms.uTime;
@@ -681,7 +707,7 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
         [tree("upright", FOLIAGE.pine, 0.3), 6, 1.6, 1.5], [tree("slant", FOLIAGE.pine), 5, 1.4, 1.2],
         [tree("windswept", FOLIAGE.pine), 5, 1.5, 1.4], [tree("informal", FOLIAGE.maple, 0.5), 5, 1.5, 1.5],
         [tree("upright", FOLIAGE.maple, 0.55), 4, 1.6, 1.4], [tree("slant", FOLIAGE.ginkgo, 0.5), 3, 1.6, 1.4],
-        [bamboo(), 6, 1.9, 1.4], [bamboo(), 6, 1.9, 1.4],
+        [cane(), 6, 1.9, 1.4], [cane(), 6, 1.9, 1.4],
     ];
     const tint = new THREE.Color();
     for (const [geo, n, near, spread] of kinds) {
@@ -693,8 +719,9 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
                 [cx, w] = river(z);
             } while (Math.hypot(cx + side * d * w - CLEAR_X, z - CLEAR_Z) < 2.8);
             q.setFromAxisAngle(Y, rng() * 6.28);
-            const k = 0.75 + rng() * 0.6, hide = inPavilion(cx + side * d * w, z, 1.9) ? 0 : 1;
+            const k = 0.75 + rng() * 0.6, hide = inPavilion(cx + side * d * w, z, 1.9) || onPath(cx + side * d * w, z, 0.9) ? 0 : 1;
             mesh.setMatrixAt(i, m4.compose(at.set(cx + side * d * w, bankHeight(Math.min(d, 1.4)) - 0.05, z), q, sc.set(k, k * (0.9 + rng() * 0.25), k).multiplyScalar(hide)));
+            if (hide && !canes.has(geo)) trunks.push({ mesh, i, x: at.x, y: at.y, z, q: q.clone(), s: sc.clone() });
             const shade = 0.85 + rng() * 0.25; // each one a touch lighter or darker, warmer or cooler
             mesh.setColorAt(i, tint.setRGB(shade * (0.97 + rng() * 0.06), shade, shade * (0.95 + rng() * 0.08)));
         }
@@ -707,7 +734,7 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
     rng = seeded(31337);
     function tall(leaves: string[]) {
         const parts: THREE.BufferGeometry[] = [], bark = pick(BARK);
-        const H = 3.4 + rng() * 1.8, lean = (rng() - 0.5) * 0.7;
+        const H = 4.6 + rng() * 2.4, lean = (rng() - 0.5) * 0.7;
         const pts = [v(0, -0.2, 0), v(lean * 0.3 + (rng() - 0.5) * 0.25, H * 0.35, (rng() - 0.5) * 0.25),
             v(lean * 0.7 + (rng() - 0.5) * 0.2, H * 0.7, (rng() - 0.5) * 0.25), v(lean, H, 0)];
         const trunk = new THREE.CatmullRomCurve3(pts);
@@ -736,8 +763,9 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
                 [cx, w] = river(z);
             } while (Math.hypot(cx + side * d * w - CLEAR_X, z - CLEAR_Z) < 3.5);
             q.setFromAxisAngle(Y, rng() * 6.28);
-            const k = 0.85 + rng() * 0.35, hide = inPavilion(cx + side * d * w, z, 2.3) ? 0 : 1;
+            const k = 0.85 + rng() * 0.35, hide = inPavilion(cx + side * d * w, z, 2.3) || onPath(cx + side * d * w, z, 1.1) ? 0 : 1;
             mesh.setMatrixAt(i, m4.compose(at.set(cx + side * d * w, bankHeight(1.4) - 0.05, z), q, sc.set(k, k * (0.9 + rng() * 0.2), k).multiplyScalar(hide)));
+            if (hide) trunks.push({ mesh, i, x: at.x, y: at.y, z, q: q.clone(), s: sc.clone() });
             const shade = 0.85 + rng() * 0.2;
             mesh.setColorAt(i, tint.setRGB(shade * 0.97, shade, shade));
         }
@@ -812,7 +840,7 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
                 z = 3 - rng() * 52; side = rng() < 0.5 ? -1 : 1; d = near + rng() * spread;
                 [cx, w] = river(z);
             } while (Math.hypot(cx + side * d * w - CLEAR_X, z - CLEAR_Z) < 2.6);
-            const x = cx + side * d * w, k = size * (0.6 + rng() * 0.6), hide = inPavilion(x, z, 1.5 + 0.4 * size) ? 0 : 1;
+            const x = cx + side * d * w, k = size * (0.6 + rng() * 0.6), hide = inPavilion(x, z, 1.5 + 0.4 * size) || onPath(x, z, 0.5 + 0.35 * size) ? 0 : 1;
             q.setFromAxisAngle(Y, rng() * 6.28);
             mesh.setMatrixAt(i, m4.compose(at.set(x, groundAt(x, z, d) - 0.2, z), q, sc.set(k, k * (0.8 + rng() * 0.4), k).multiplyScalar(hide)));
             const shade = 0.82 + rng() * 0.25;
@@ -821,31 +849,50 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
         decor.add(mesh);
     }
 
+    // ---- filling in behind the bank trees: big round bushes packed along the banks and up the slopes, and more
+    // bamboo, so there's foliage behind every trunk instead of bare ground. Their own random numbers.
+    rng = seeded(1618);
+    const fill: [THREE.BufferGeometry, number, number, number, number][] = [ // like sides: geometry, how many, nearest, how far back, how big
+        [bush(SHRUB), 26, 1.45, 3.6, 1.9], [bush(FOLIAGE.jade), 22, 1.45, 3.6, 1.9], [bush(FOLIAGE.pine), 22, 1.6, 3.8, 2.1],
+        [bush(SHRUB, ["#d9788a", "#e59aa8", "#c95f74"]), 8, 1.45, 2.4, 1.6],
+        [bush(SHRUB), 24, 4.0, 4.0, 2.7], [bush(FOLIAGE.jade), 24, 4.0, 4.0, 2.7], // up the hills, so they fill in higher behind the trunks
+        [cane(), 14, 1.6, 3.0, 1.35], [cane(), 14, 1.6, 3.0, 1.35], [cane(), 10, 3.5, 2.5, 1.5],
+    ];
+    for (const [geo, n, near, spread, size] of fill) {
+        const count = Math.max(1, Math.round(n * (small ? 0.6 : 1))), mesh = new THREE.InstancedMesh(geo, treeMat, count);
+        for (let i = 0; i < count; i++) {
+            const z = 1 - rng() * 50, side = rng() < 0.5 ? -1 : 1, d = near + rng() * spread, [cx, w] = river(z), x = cx + side * d * w;
+            const k = size * (0.7 + rng() * 0.6);
+            let hide = inPavilion(x, z, 1.6 + 0.4 * size) || onPath(x, z, 0.5 + 0.35 * size) ? 0 : 1;
+            const tree = canes.has(geo) && hide ? trunks.find((t) => Math.hypot(x - t.x, z - t.z) < 1.2) : undefined;
+            if (tree) { // bamboo growing through a tree: the tree steps forward, in front of it (towards the camera)
+                const nz = z + 1.6;
+                if (onPath(tree.x, nz, 1.0) || inPavilion(tree.x, nz, 2.3)) hide = 0; // nowhere for it to go: no bamboo here
+                else { tree.z = nz; tree.mesh.setMatrixAt(tree.i, m4.compose(at.set(tree.x, tree.y, nz), tree.q, tree.s)); }
+            }
+            q.setFromAxisAngle(Y, rng() * 6.28);
+            mesh.setMatrixAt(i, m4.compose(at.set(x, groundAt(x, z, d) - 0.2, z), q, sc.set(k, k * (0.8 + rng() * 0.35), k).multiplyScalar(hide)));
+            const shade = 0.8 + rng() * 0.25;
+            mesh.setColorAt(i, tint.setRGB(shade * (0.96 + rng() * 0.06), shade, shade * (0.95 + rng() * 0.08)));
+        }
+        decor.add(mesh);
+    }
+
     // ---- a far band of woods on the hills beyond, so a wide screen sees forest fading into the haze rather than
-    // bare slopes: plain low-detail pines and broadleaf crowns, as they only ever stand far off. Their own random
-    // numbers, so everything above stays where it was.
+    // bare slopes: plain low-detail broadleaf crowns, as they only ever stand far off (cone pines here looked
+    // blocky once the camera looked up at them). Their own random numbers, so everything above stays where it was.
     rng = seeded(5150);
-    function farTree(kind: "pine" | "broad") {
-        const parts: THREE.BufferGeometry[] = [], bark = pick(BARK);
-        if (kind === "pine") {
-            const H = 2.6 + rng() * 1.6;
-            parts.push(painted(new THREE.CylinderGeometry(0.08, 0.14, H * 0.4, 5).translate(0, H * 0.2, 0), bark));
-            for (let k = 0; k < 3; k++) { // tiers narrowing upwards
-                const r = (0.95 - k * 0.25) * (0.9 + rng() * 0.2);
-                parts.push(painted(new THREE.ConeGeometry(r, H * 0.38, 7).translate(0, H * (0.49 + k * 0.22), 0), pick(FOLIAGE.pine)));
-            }
-        } else {
-            const H = 2.4 + rng() * 1.4;
-            parts.push(painted(new THREE.CylinderGeometry(0.07, 0.13, H * 0.6, 5).translate(0, H * 0.3, 0), bark));
-            for (let k = 0; k < 5; k++) { // a crown of lumps round a middle one
-                const a = rng() * 6.28, d = k ? 0.45 + rng() * 0.3 : 0, r = k ? 0.55 + rng() * 0.3 : 0.85;
-                parts.push(painted(new THREE.IcosahedronGeometry(r, 1).scale(1, 0.8, 1)
-                    .translate(Math.cos(a) * d, H * (k ? 0.75 + rng() * 0.2 : 0.95), Math.sin(a) * d), pick(FOLIAGE.jade)));
-            }
+    function farTree() {
+        const parts: THREE.BufferGeometry[] = [], bark = pick(BARK), H = 2.4 + rng() * 1.4;
+        parts.push(painted(new THREE.CylinderGeometry(0.07, 0.13, H * 0.6, 5).translate(0, H * 0.3, 0), bark));
+        for (let k = 0; k < 5; k++) { // a crown of lumps round a middle one
+            const a = rng() * 6.28, d = k ? 0.45 + rng() * 0.3 : 0, r = k ? 0.55 + rng() * 0.3 : 0.85;
+            parts.push(painted(new THREE.IcosahedronGeometry(r, 1).scale(1, 0.8, 1)
+                .translate(Math.cos(a) * d, H * (k ? 0.75 + rng() * 0.2 : 0.95), Math.sin(a) * d), pick(FOLIAGE.jade)));
         }
         return mergeGeometries(parts)!;
     }
-    for (const [geo, n] of [[farTree("pine"), 55], [farTree("pine"), 45], [farTree("broad"), 55], [farTree("broad"), 45]] as const) {
+    for (const [geo, n] of [[farTree(), 55], [farTree(), 45], [farTree(), 55], [farTree(), 45]] as const) {
         const count = Math.round(n * (small ? 0.5 : 1)), mesh = new THREE.InstancedMesh(geo, treeMat, count);
         for (let i = 0; i < count; i++) {
             const z = 8 - rng() * 75, side = rng() < 0.5 ? -1 : 1, d = 6.5 + rng() * 8, [cx, w] = river(z), x = cx + side * d * w;
@@ -923,6 +970,43 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
     bridge.rotation.y = Math.atan2(river(BRIDGE_Z + 0.5)[0] - river(BRIDGE_Z - 0.5)[0], 1); // square across the current
     decor.add(bridge);
     loadModel("/models/bridge/bridge.glb", (geo) => { bridge.add(new THREE.Mesh(geo, bridgeMat)); });
+
+    // ---- the paths off the bridge (PATHS): packed earth, ragged at the edges, with flat stones laid in pairs
+    rng = seeded(2718);
+    const pathMat = solid();
+    dimmed.push([pathMat, 0.35]);
+    const pathY = (x: number, z: number) => { const [cx, w] = river(z), d = Math.abs(x - cx) / w; return groundAt(x, z, d); };
+    const pathParts: THREE.BufferGeometry[] = [];
+    for (const curve of PATHS) {
+        const N = 60, pos: number[] = [], idx: number[] = [], P = new THREE.Vector3(), T = new THREE.Vector3();
+        for (let i = 0; i <= N; i++) { // the earth: a ribbon about a metre wide
+            curve.getPointAt(i / N, P); curve.getTangentAt(i / N, T);
+            const nx = -T.z, nz = T.x, half = 0.55 + (rng() - 0.5) * 0.18;
+            for (const s of [-1, 1]) {
+                const x = P.x + nx * half * s, z = P.z + nz * half * s;
+                pos.push(x, pathY(x, z) + 0.03, z);
+            }
+            if (i < N) { const a = i * 2; idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); }
+        }
+        const earth = new THREE.BufferGeometry();
+        earth.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+        earth.setIndex(idx);
+        earth.computeVertexNormals(); // the stones have normals, and merged parts must all match
+        pathParts.push(painted(earth, "#7a6a52"));
+        const len = curve.getLength();
+        for (let u = 0.25; u < len; u += 0.46) { // the stones, two abreast, each a little askew
+            curve.getPointAt(u / len, P); curve.getTangentAt(u / len, T);
+            for (const s of [-1, 1]) {
+                const off = s * (0.22 + rng() * 0.05), x = P.x - T.z * off + (rng() - 0.5) * 0.06, z = P.z + T.x * off + (rng() - 0.5) * 0.06;
+                const r = 0.17 + rng() * 0.06, g = new THREE.IcosahedronGeometry(1, 0).scale(r * (1 + rng() * 0.3), 0.045, r).rotateY(rng() * 6.28);
+                pathParts.push(painted(g.translate(x, pathY(x, z) + 0.06, z), pick(["#9a9890", "#8a8a82", "#a7a296", "#7f8079"])));
+            }
+        }
+    }
+    const pathMesh = new THREE.Mesh(mergeGeometries(pathParts)!, pathMat);
+    pathMesh.renderOrder = -1; // under the grass and anything standing on the bank
+    decor.add(pathMesh);
+    rng = mainRng;
 
     // ---- a red double-eaved pavilion upstream on the far bank, half lost in the mist
     // (scripts/blender/pavilion.py). Its steps face the camera.
@@ -1128,6 +1212,42 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
         return puff;
     });
 
+    // ---- slow clouds drifting across the sky behind the mountains, in the low view only (draw moves them and fades
+    // them out with the rest of its scenery as the camera rises)
+    const SKY_W = 150; // they wrap round at ±SKY_W, well outside even a wide screen's view
+    const skyTexture = (() => { // a long, flat-bottomed billow, shaded grey underneath so it stands out on the pale mist
+        const c = document.createElement("canvas");
+        c.width = 256; c.height = 128;
+        const g = c.getContext("2d")!;
+        for (let i = 0; i < 18; i++) {
+            const x = 40 + Math.random() * 176, y = 58 + (Math.random() - 0.3) * 30 - (1 - Math.abs(x - 128) / 128) * 18, r = 16 + Math.random() * 22;
+            const grad = g.createRadialGradient(x, y, 0, x, y, r);
+            grad.addColorStop(0, "rgba(255,255,255,0.95)");
+            grad.addColorStop(0.55, "rgba(255,255,255,0.7)");
+            grad.addColorStop(1, "rgba(255,255,255,0)");
+            g.fillStyle = grad;
+            g.fillRect(0, 0, 256, 128);
+        }
+        g.globalCompositeOperation = "source-atop"; // shade only where there's cloud
+        const under = g.createLinearGradient(0, 30, 0, 100);
+        under.addColorStop(0, "rgba(150,164,160,0)");
+        under.addColorStop(1, "rgba(150,164,160,0.75)");
+        g.fillStyle = under;
+        g.fillRect(0, 0, 256, 128);
+        const t = new THREE.CanvasTexture(c);
+        t.colorSpace = THREE.SRGBColorSpace;
+        return t;
+    })();
+    const skyMat = new THREE.SpriteMaterial({ map: skyTexture, transparent: true, depthWrite: false, fog: false });
+    const skyClouds = Array.from({ length: 16 }, () => { // sprites cost next to nothing, and a phone's narrow view needs them all
+        const puff = new THREE.Sprite(skyMat), w = 28 + Math.random() * 34;
+        puff.scale.set(w, w * (0.4 + Math.random() * 0.15), 1); // the texture is 2:1, a little squashed
+        puff.position.set((Math.random() * 2 - 1) * SKY_W, 18 + Math.random() * 20, -110 - Math.random() * 50);
+        puff.userData.speed = 0.3 + Math.random() * 0.45; // world units a second: a slow drift
+        world.add(puff);
+        return puff;
+    });
+
     // ---- colours: AquaPlot's teal water on this site's white (or near-black) page
     const fog = new THREE.Fog("#d9e0da", LIT_HAZE[0], LIT_HAZE[1]);
     world.fog = fog;
@@ -1158,6 +1278,7 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
         lampMat.color.set(dark ? "#ffc27a" : "#e9dcc0");
         ridgeMats.forEach((m, k) => m.uniforms.uColor.value.set(RIDGES[k].color[dark ? 1 : 0]));
         cloudMat.color.set(dark ? "#3a4448" : "#ffffff");
+        skyMat.color.set(dark ? "#2c3638" : "#ffffff");
         night = dark; // the lanterns' glow (draw)
         renderer.setClearColor(bg);
         if (!running) draw(0);
@@ -1246,7 +1367,7 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
         }
     }
 
-    // ---- the camera: low down looking up the stream behind About me, leaning a little towards the pointer;
+    // ---- the camera: low down looking up the stream to the far scenery, leaning a little towards the pointer;
     // rising as you scroll to look straight down on the river beside the posts
     const lean = { x: 0, y: 0, tx: 0, ty: 0 };
     const onPointer = (e: PointerEvent) => {
@@ -1269,12 +1390,12 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
         const haze = Math.sin(Math.PI * clamp01((p - 0.06) / 0.88)) ** 1.5; // 0 in either view, 1 mid-climb
         // locked to the page, not eased: the bends have to stay beside the posts they go round
         const zc = Math.max(0, scrollY - heroH) * wpp;
-        const tall = camera.aspect < 1, heroFov = tall ? 55 : 44; // tall screens look further down, so the stream fills them
+        const tall = camera.aspect < 1, heroFov = tall ? 53 : 45; // tall screens see more height, so the scenery fills them
         lean.x += (lean.tx - lean.x) * Math.min(1, dt * 2.5);
         lean.y += (lean.ty - lean.y) * Math.min(1, dt * 2.5);
 
-        eye0.set(lean.x, 2.3 - lean.y, zc + 6.5); // gazing well up the stream, towards the far bends
-        q0.setFromRotationMatrix(m4.lookAt(eye0, aim.set(lean.x * 0.4, tall ? -1.9 : -0.7, zc - 4), up));
+        eye0.set(lean.x, 2.7 - lean.y, zc + 6.5); // high enough to see over the bridge onto the far bank and its paths,
+        q0.setFromRotationMatrix(m4.lookAt(eye0, aim.set(lean.x * 0.4, tall ? 1.6 : 1.3, zc - 4), up)); // gazing nearly level up the stream
         eye1.set(0, topH, zc);
         q1.setFromRotationMatrix(m4.lookAt(eye1, aim.set(0, 0, zc), NORTH));
         camera.position.lerpVectors(eye0, eye1, e);
@@ -1300,6 +1421,12 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
         glowMat.opacity = night ? 1 - gone : 0;
         cloudMat.opacity = haze * 0.85;
         cloudMat.visible = haze > 0.001;
+        skyMat.opacity = 1 - gone;
+        for (const puff of skyClouds) {
+            puff.visible = gone < 1;
+            if (!still.matches) puff.position.x += puff.userData.speed * dt;
+            if (puff.position.x > SKY_W) puff.position.x -= 2 * SKY_W;
+        }
         for (const puff of clouds) { // each at its own height, beside where the camera is when it gets there
             const d = puff.userData, y = mix(4, topH * 0.85, d.u), k = clamp01((y - 2.1) / (topH - 2.1)), spread = 3 + y * 0.5;
             puff.position.set(d.x * spread, y, zc + 6.5 * (1 - k) - 4 * (1 - k) + d.z * spread);
@@ -1376,6 +1503,7 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
             reflow.disconnect();
             removeEventListener("pointermove", onPointer);
             removeEventListener("scroll", onScroll);
+        removeEventListener("resize", onScroll);
             document.removeEventListener("visibilitychange", update);
             still.removeEventListener("change", update);
             world.traverse((o) => {
@@ -1388,16 +1516,19 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
             blankPath.dispose();
             puffTexture.dispose();
             cloudMat.dispose();
+            skyMat.dispose();
+            skyTexture.dispose();
             renderer.dispose();
         },
     };
 }
 
-// The first screen and the way off it, separate from the scene so it works without WebGL. About me fades and
-// lifts away as you scroll (--hero-p, 0..1, on the page; app/blogs/timeline.css). Between the two views the camera
-// is mid-climb, which looks wrong to stop on, so the page never rests there: My Blogs, or any scroll down from
-// About me (wheel, touch or keys), glides all the way through the climb to the river, and a scroll up from the top
-// of the timeline glides back. Not while About me is being edited, so the form can scroll.
+// The first screen and the way off it, separate from the scene so it works without WebGL. My Blogs fades and
+// lifts away as you scroll (--hero-p, 0..1, on the page; app/blogs/timeline.css), and data-in-flow marks the page
+// once it's down at the posts (admins' Post button shows then). Between the two views the camera is mid-climb,
+// which looks wrong to stop on, so the page never rests there: My Blogs, or any scroll down from the first screen
+// (wheel, touch or keys), glides all the way through the climb to the river, and a scroll up from the top of the
+// timeline glides back.
 function heroScroll(hero: HTMLElement) {
     const easeInOut = (k: number) => (k < 0.5 ? 4 * k * k * k : 1 - (-2 * k + 2) ** 3 / 2);
     let queued = false, glide = 0, gliding = false, touching = false, touchY = 0, lastY = scrollY, dir = 1, rest = 0, calm = 0;
@@ -1415,18 +1546,17 @@ function heroScroll(hero: HTMLElement) {
         };
         glide = requestAnimationFrame(step);
     }
-    const editing = () => !!hero.querySelector("input, textarea");
     // Whether a scroll this way is ours to turn into a glide: anything on the first screen or mid-climb, and
     // scrolling up from the top of the timeline. Returns false to let the page scroll as usual.
     function take(down: boolean) {
         const h = hero.offsetHeight;
-        if (editing() || !(scrollY < h - 2 || (!down && scrollY <= h + 2) || gliding || performance.now() < calm)) return false;
+        if (!(scrollY < h - 2 || (!down && scrollY <= h + 2) || gliding || performance.now() < calm)) return false;
         if (!gliding && performance.now() >= calm) glideTo(down ? h : 0);
         return true;
     }
     function settle() { // a scroll that came to rest mid-climb (the scrollbar, momentum) goes on the way it was going
         const h = hero.offsetHeight;
-        if (gliding || touching || editing()) return;
+        if (gliding || touching) return;
         if (scrollY > 2 && scrollY < h - 2) glideTo(dir > 0 ? h : 0);
     }
     const later = () => { clearTimeout(rest); rest = window.setTimeout(settle, 160); };
@@ -1438,8 +1568,12 @@ function heroScroll(hero: HTMLElement) {
         queued = true;
         requestAnimationFrame(() => {
             queued = false;
-            // on the page, not just the hero: the posts' lines use it too
-            (hero.parentElement ?? hero).style.setProperty("--hero-p", clamp01(scrollY / Math.max(hero.offsetHeight, 1)).toFixed(4));
+            // on the page, not just the hero: the posts' lines and the Post button use them too
+            const page = hero.parentElement ?? hero, p = clamp01(scrollY / Math.max(hero.offsetHeight, 1));
+            page.style.setProperty("--hero-p", p.toFixed(4));
+            page.toggleAttribute("data-in-flow", p > 0.98);
+            // the nav's height (it wraps onto more rows on narrow screens), so My Blogs and Post clear it
+            page.style.setProperty("--nav-h", `${document.querySelector("header")?.offsetHeight ?? 40}px`);
         });
     };
     const onWheel = (e: WheelEvent) => {
@@ -1460,13 +1594,14 @@ function heroScroll(hero: HTMLElement) {
         if (e.touches.length > 1 || !e.cancelable) return; // two fingers: pinch-zooming
         const dy = touchY - e.touches[0].clientY; // > 0: the finger moves up, scrolling down
         if (Math.abs(dy) < 8) { // too small to tell which way yet; on the first screen, don't let the page start moving
-            if (!editing() && scrollY < hero.offsetHeight - 2) e.preventDefault();
+            if (scrollY < hero.offsetHeight - 2) e.preventDefault();
             return;
         }
         if (take(dy > 0)) e.preventDefault();
     };
     const onLink = (e: MouseEvent) => { e.preventDefault(); glideTo(hero.offsetHeight); };
     addEventListener("scroll", onScroll, { passive: true });
+    addEventListener("resize", onScroll, { passive: true });
     addEventListener("wheel", onWheel, { passive: false });
     addEventListener("keydown", onKey);
     addEventListener("touchstart", onTouch, { passive: true });
