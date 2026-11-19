@@ -18,6 +18,10 @@ async function Page({ params }: { params: Promise<{ id: string }> }) {
 
   return (
     <main className="w-full max-w-2xl mx-auto px-4 pb-10">
+      {/* straight back to this post's place on the river, rather than the top of /blogs and the long scroll down */}
+      <Link href={`/blogs#post-${post.id}`} className="mt-6 -mb-4 inline-flex items-center gap-1 text-sm text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100">
+        <span aria-hidden>←</span> Back to blogs
+      </Link>
       <Cover
         big
         image={post.image}

@@ -17,7 +17,7 @@ const frost = "rounded-2xl bg-white/60 dark:bg-black/45 backdrop-blur-md";
 // A bubble per post; the whole bubble opens the post (the title link stretches over it)
 function PostCard({ post, admin, side }: { post: PostType; admin: boolean; side: "a" | "b" }) {
   return (
-    <div className={`${side} reveal`}>
+    <div id={`post-${post.id}`} className={`${side} reveal`}>
       <article className={`relative overflow-hidden transition-colors hover:bg-white/80 dark:hover:bg-black/65 ${frost}`}>
         <Cover
           image={post.image}

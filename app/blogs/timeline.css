@@ -30,7 +30,7 @@
 
 /* Each post's line to the river: the timeline's marks. RiverBackground measures where the water's edge is level
    with each title (--reach, data-river); until then, the line runs to the channel's middle. */
-.river-row > .reveal { position: relative; --reach: calc(var(--ch) / 2); }
+.river-row > .reveal { position: relative; --reach: calc(var(--ch) / 2); scroll-margin-top: calc(var(--nav-h, 40px) + 24px); } /* a post's Back link lands here */
 /* They only line up with the river once the camera looks straight down, so they appear over the last of the climb. */
 .river-row > .reveal::before { content: ""; position: absolute; top: 30px; left: 100%; width: var(--reach); height: 2px;
   margin-top: -1px; background: rgb(255 255 255 / .92); box-shadow: 0 0 3px rgb(0 0 0 / .2); pointer-events: none;
