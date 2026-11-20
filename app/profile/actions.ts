@@ -47,7 +47,9 @@ export async function reviewBlog(requestId: string, approve: boolean) {
     await dbConnect();
     const request = await Inbox.findOneAndDelete({ _id: String(requestId), kind: "blog" });
     if (request && approve) {
-        await Post.create({ id: crypto.randomUUID(), date: new Date(), title: request.title, content: request.content });
+        // the byline is the name they go by now (they may have changed it on their profile since asking)
+        const sender = await (await (await initAuth()).$context).internalAdapter.findUserByEmail(request.email);
+        await Post.create({ id: crypto.randomUUID(), date: new Date(), title: request.title, content: request.content, author: sender?.user.name || request.name });
         revalidatePath("/blogs");
     }
     revalidatePath("/profile");

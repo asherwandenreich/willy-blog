@@ -1,11 +1,22 @@
-/* /blogs (app/blogs/page.tsx), after AquaPlot's about page. The first screen is About me over the stream,
-   fading as you scroll away (components/RiverBackground.tsx sets --hero-p, 0..1, on the page). Below it the posts come
+/* /blogs (app/blogs/page.tsx), after AquaPlot's about page. The first screen is just the stream and its
+   scenery with a quiet My Blogs link at the bottom, fading as you scroll away (components/RiverBackground.tsx sets --hero-p, 0..1, on the page). Below it the posts come
    in pairs, one either side of the river: each row leaves a channel between its two columns (.ch), and the
    river is drawn down the channels, bending from one to the next. Rows lean left and right a little
    (--shift), which is what makes it wind; the shifts stay small because the river keeps one width all the
    way down. The right-hand post sits lower than the left, so the posts read as a zigzag timeline. */
-/* About me sits at the bottom of the first screen, in the open water below the bridge */
-.river-hero { position: relative; min-height: 100svh; display: flex; flex-direction: column; justify-content: flex-end; padding-bottom: 10svh; }
+/* My Blogs sits at the bottom of the first screen: an outline and an arrow, shadowed so they read on bright mist */
+.river-hero { position: relative; min-height: 100svh; display: flex; flex-direction: column; justify-content: flex-end;
+              padding-bottom: calc(5svh + var(--nav-h, 40px)); } /* it starts below the nav, so its last bit is off-screen */
+.hero-down { filter: drop-shadow(0 1px 3px rgb(0 0 0 / .45)); outline-offset: 6px; }
+
+/* Admins' Post button, top right under the nav, only once the camera is down at the river
+   (RiverBackground sets data-in-flow on the page) */
+.post-fab { position: fixed; top: calc(var(--nav-h, 40px) + 12px); right: 16px; z-index: 15; border-radius: 9999px; padding: 6px 18px; font-size: .875rem;
+  background: rgb(255 255 255 / .7); backdrop-filter: blur(12px); box-shadow: 0 1px 6px rgb(0 0 0 / .12);
+  opacity: 0; visibility: hidden; transform: translateY(-6px); transition: opacity .3s, transform .3s, visibility 0s .3s; }
+.post-fab:hover { background: rgb(255 255 255 / .9); }
+.dark .post-fab { background: rgb(0 0 0 / .5); }
+[data-in-flow] .post-fab { opacity: 1; visibility: visible; transform: none; transition: opacity .3s, transform .3s; }
 .river-hero > div { opacity: calc(1 - var(--hero-p, 0) * 1.6); transform: translate3d(0, calc(var(--hero-p, 0) * -90px), 0); }
 
 .river-flow { --ch: clamp(260px, 30vw, 460px); --ch-n: clamp(76px, 22vw, 210px);
@@ -19,7 +30,7 @@
 
 /* Each post's line to the river: the timeline's marks. RiverBackground measures where the water's edge is level
    with each title (--reach, data-river); until then, the line runs to the channel's middle. */
-.river-row > .reveal { position: relative; --reach: calc(var(--ch) / 2); }
+.river-row > .reveal { position: relative; --reach: calc(var(--ch) / 2); scroll-margin-top: calc(var(--nav-h, 40px) + 24px); } /* a post's Back link lands here */
 /* They only line up with the river once the camera looks straight down, so they appear over the last of the climb. */
 .river-row > .reveal::before { content: ""; position: absolute; top: 30px; left: 100%; width: var(--reach); height: 2px;
   margin-top: -1px; background: rgb(255 255 255 / .92); box-shadow: 0 0 3px rgb(0 0 0 / .2); pointer-events: none;

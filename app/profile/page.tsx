@@ -7,6 +7,7 @@ import SignInForm from "@/components/SignInForm";
 import SignOutButton from "@/components/SignOutButton";
 import PostForm from "@/components/PostForm";
 import MessageForm from "@/components/MessageForm";
+import NameForm from "@/components/NameForm";
 import ReviewButtons from "@/components/ReviewButtons";
 import CollegeHub from "@/components/CollegeHub";
 import CollegeModel from "@/lib/CollegeModel";
@@ -114,7 +115,9 @@ export default async function Profile({ searchParams }: PageProps<"/profile">) {
       <section className="flex-1 min-w-0 px-4 sm:px-10 pb-10">
         <div className="max-w-2xl mx-auto">
           {current === "" && (<>
-            <h1 className={heading}>Welcome, {session.user.name}</h1>
+            <h1 className={`${heading} mb-1`}>Welcome, {session.user.name}</h1>
+            <p className="mb-8 text-sm text-zinc-500">{session.user.email}</p>
+            <NameForm name={session.user.name} />
             <SignOutButton />
           </>)}
           {current === "contribute" && (<>

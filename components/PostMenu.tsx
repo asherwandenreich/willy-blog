@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { deletePost, setPostImage } from "@/app/post/actions";
 import { shrinkAndUpload } from "./ImagePicker";
 
-// The ⋯ in the top right of a post bubble: add, change or remove its cover image, or delete it
+// The ⋯ in the top right of a post bubble: edit the post, add, change or remove its cover image, or delete it
 // (admins only; the actions check too).
 export default function PostMenu({ id, title, image }: { id: string; title: string; image?: string }) {
     const [open, setOpen] = useState(false);
@@ -70,6 +71,10 @@ export default function PostMenu({ id, title, image }: { id: string; title: stri
                     bg-white dark:bg-zinc-950 p-1 shadow-lg transition-[opacity,transform] duration-200 ease-[cubic-bezier(.3,.7,.4,1)]
                     ${open ? "opacity-100 scale-100" : "pointer-events-none opacity-0 scale-90"}`}
             >
+                <Link href={`/post?edit=${encodeURIComponent(id)}`}
+                    className="block w-full rounded-lg px-3 py-1.5 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-900">
+                    Edit
+                </Link>
                 <input ref={file} type="file" accept="image/*" className="hidden" onChange={(e) => cover(e.target.files?.[0])} />
                 <button type="button" disabled={uploading} onClick={() => file.current?.click()}
                     className="w-full rounded-lg px-3 py-1.5 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-900 disabled:opacity-50">

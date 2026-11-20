@@ -6,6 +6,7 @@ import { initAuth, ADMIN_EMAILS } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { isImageId, deleteUnusedImage } from "@/lib/ImageModel";
+import { NAME_MAX } from "@/lib/names";
 
 export interface PostType {
     id: string;
@@ -13,7 +14,10 @@ export interface PostType {
     title: string;
     content: string[];
     image?: string;
+    author?: string;
 }
+
+const authorOf = (post: PostType) => String(post.author ?? "").trim().replace(/\s+/g, " ").slice(0, NAME_MAX) || undefined;
 
 export async function postBlog(post: PostType) {
     const auth = await initAuth();
@@ -23,7 +27,7 @@ export async function postBlog(post: PostType) {
     }
     if (post.image !== undefined && !isImageId(post.image)) throw new Error("Bad image");
     await dbConnect();
-    await Post.create(post);
+    await Post.create({ ...post, author: authorOf(post) });
     revalidatePath("/blogs"); // the list is cached (and prerendered on Vercel), so refresh it to show the new post
 
     /* try {
@@ -34,6 +38,24 @@ export async function postBlog(post: PostType) {
             console.error("Error:" + error);
         }
     */
+}
+
+// Admins: change a published post's title, text or cover image (its id and date stay the same)
+export async function updatePost(post: PostType) {
+    const auth = await initAuth();
+    const session = await auth.api.getSession({ headers: await headers() });
+    if (!session || !ADMIN_EMAILS.includes(session.user.email)) throw new Error("Unauthorized");
+    if (post.image !== undefined && !isImageId(post.image)) throw new Error("Bad image");
+    const title = String(post.title ?? "").trim();
+    const content = Array.isArray(post.content) ? post.content.map(String) : [];
+    if (!title) throw new Error("A post needs a title");
+    await dbConnect();
+    const old = await Post.findOneAndUpdate({ id: String(post.id) },
+        { title, content, ...(post.image ? { image: post.image } : { $unset: { image: 1 } }), ...(authorOf(post) ? { author: authorOf(post) } : {}) });
+    if (!old) throw new Error("No such post");
+    if (old.image !== post.image) await deleteUnusedImage(old.image);
+    revalidatePath("/blogs");
+    revalidatePath(`/blogs/${post.id}`);
 }
 
 // Admins: give a published post a cover image, or take it away (image undefined)
