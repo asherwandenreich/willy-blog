@@ -19,6 +19,8 @@ async function Nav() {
         <Link href="/blogs" className={box}>Blogs</Link>
         <Link href="/projects" className={box}>Projects</Link>
         <Link href="/rustbreeder" className={box}>Rustbreeder</Link>
+        {/* private log: only an admin sees the link (the page checks again) */}
+        {admin && <Link href="/calories" className={box}>Calories</Link>}
         {admin && <Link href="/wardrobe" className={box}>Wardrobe</Link>}
         {admin && <Link href="/followback" className={box}>Instagram</Link>}
         {/* plain <a>: /sat is a route handler serving a standalone page, not a React page */}

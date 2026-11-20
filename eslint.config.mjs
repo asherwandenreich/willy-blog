@@ -16,6 +16,9 @@ const eslintConfig = defineConfig([
     ".sst/**",
     ".open-next/**",
     "sst.config.ts",
+    // Bklit UI charts, copied in by `npx shadcn add @bklit/...`: third-party code, kept as shipped so updates paste over cleanly
+    "components/charts/**",
+    "components/shimmering-text.tsx",
   ]),
 ]);
 
